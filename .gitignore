@@ -1,0 +1,35 @@
+# Node.js
+node_modules/
+dist/
+build/
+.npm
+.eslintcache
+*.log
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Expo
+.expo/
+web-build/
+*.jks
+*.p8
+*.pk8
+*.keystore
+
+# Prisma
+/backend/prisma/migrations/

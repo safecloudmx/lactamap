@@ -1,0 +1,9 @@
+{
+  "name": "LactaMap",
+  "description": "Una aplicación para encontrar, calificar y compartir lactarios y baños con cambiadores de bebé en tu zona.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}

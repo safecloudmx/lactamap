@@ -1,0 +1,148 @@
+import React from 'react';
+import { View, Text, Image, StyleSheet } from 'react-native';
+import { MapPin } from 'lucide-react-native';
+import { Lactario } from '../types';
+import { AMENITY_LABELS } from '../constants';
+import { colors, spacing, typography, radii } from '../theme';
+import { Card, Rating, StatusBadge } from './ui';
+
+interface LactarioCardProps {
+  lactario: Lactario;
+  onPress: () => void;
+  showStatus?: boolean;
+}
+
+export default function LactarioCard({ lactario, onPress, showStatus }: LactarioCardProps) {
+  const amenities = lactario.amenities || [];
+
+  return (
+    <Card onPress={onPress} style={styles.card}>
+      <View style={styles.imageContainer}>
+        <Image
+          source={{ uri: lactario.imageUrl || `https://picsum.photos/seed/${lactario.id}/400/200` }}
+          style={styles.image}
+        />
+        {showStatus && (
+          <View style={styles.statusOverlay}>
+            <StatusBadge status={lactario.status} />
+          </View>
+        )}
+        {lactario.isVerified && (
+          <View style={styles.verifiedBadge}>
+            <Text style={styles.verifiedText}>Verificado</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.content}>
+        <Text style={styles.name} numberOfLines={1}>{lactario.name}</Text>
+
+        <View style={styles.row}>
+          <MapPin size={14} color={colors.slate[400]} />
+          <Text style={styles.address} numberOfLines={1}>
+            {lactario.address || 'Ubicacion no disponible'}
+          </Text>
+        </View>
+
+        <View style={styles.row}>
+          <Rating value={lactario.rating || 0} size={14} />
+          <Text style={styles.ratingText}>{(lactario.rating || 0).toFixed(1)}</Text>
+          <Text style={styles.reviewCount}>({lactario.reviews?.length || 0})</Text>
+        </View>
+
+        {amenities.length > 0 && (
+          <View style={styles.amenitiesRow}>
+            {amenities.slice(0, 3).map((a, i) => (
+              <View key={i} style={styles.amenityChip}>
+                <Text style={styles.amenityText}>{AMENITY_LABELS[a as keyof typeof AMENITY_LABELS] || a}</Text>
+              </View>
+            ))}
+            {amenities.length > 3 && (
+              <Text style={styles.moreText}>+{amenities.length - 3}</Text>
+            )}
+          </View>
+        )}
+      </View>
+    </Card>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    marginBottom: spacing.lg,
+  },
+  imageContainer: {
+    position: 'relative',
+  },
+  image: {
+    width: '100%',
+    height: 160,
+    backgroundColor: colors.slate[200],
+  },
+  statusOverlay: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+  },
+  verifiedBadge: {
+    position: 'absolute',
+    top: spacing.sm,
+    left: spacing.sm,
+    backgroundColor: colors.success,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.sm,
+  },
+  verifiedText: {
+    ...typography.captionBold,
+    color: colors.white,
+  },
+  content: {
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
+  name: {
+    ...typography.h4,
+    color: colors.slate[800],
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  address: {
+    ...typography.small,
+    color: colors.slate[500],
+    flex: 1,
+  },
+  ratingText: {
+    ...typography.smallBold,
+    color: colors.slate[800],
+    marginLeft: spacing.xs,
+  },
+  reviewCount: {
+    ...typography.caption,
+    color: colors.slate[400],
+  },
+  amenitiesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  amenityChip: {
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.sm,
+  },
+  amenityText: {
+    ...typography.caption,
+    color: colors.primary[700],
+  },
+  moreText: {
+    ...typography.captionBold,
+    color: colors.slate[400],
+    alignSelf: 'center',
+  },
+});

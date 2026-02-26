@@ -1,6 +1,9 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 # lactamap
 =======
+=======
+>>>>>>> 27efff6 (Initial commit with cloud DB configuration)
 # LactaMap Project
 
 ## Prerequisites
@@ -40,4 +43,7 @@ npx expo start
 
 - `backend/`: Express.js API + Prisma
 - `frontend/`: React Native (Expo) App
+<<<<<<< HEAD
+>>>>>>> 27efff6 (Initial commit with cloud DB configuration)
+=======
 >>>>>>> 27efff6 (Initial commit with cloud DB configuration)

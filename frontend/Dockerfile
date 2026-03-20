@@ -22,12 +22,8 @@ RUN npm install -g serve
 
 # Copy built app from builder
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/web-build ./web-build
-
-# Use dist if it exists, otherwise web-build
-RUN if [ -d "dist" ]; then echo "dist" > build_dir.txt; else echo "web-build" > build_dir.txt; fi
 
 EXPOSE 3000
 
 # Start command - serve the web build
-CMD serve -s dist -l 3000 || serve -s web-build -l 3000
+CMD serve -s dist -l 3000

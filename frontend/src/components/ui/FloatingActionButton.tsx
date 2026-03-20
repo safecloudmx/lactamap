@@ -18,8 +18,8 @@ export default function FloatingActionButton({ onPress }: FABProps) {
 const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
-    bottom: 90,
-    right: 20,
+    bottom: 50,
+    left: 50,
     width: 56,
     height: 56,
     borderRadius: 28,

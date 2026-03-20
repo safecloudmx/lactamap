@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, Animated, StyleSheet, Dimensions } from 'react-native';
-import { MapPin, ChevronRight, X } from 'lucide-react-native';
+import { MapPin, ChevronRight, X, Users } from 'lucide-react-native';
 import { Lactario } from '../../types';
 import { colors, spacing, typography, radii, shadows } from '../../theme';
 import { Rating } from '../ui';
@@ -37,6 +37,7 @@ export default function MarkerPreviewSheet({ lactario, onViewDetail, onDismiss }
   if (!lactario) return null;
 
   const amenities = lactario.amenities || [];
+  const reviewCount = lactario.reviewCount ?? lactario.reviews?.length ?? 0;
 
   return (
     <Animated.View style={[styles.container, { transform: [{ translateY }] }]}>
@@ -45,12 +46,21 @@ export default function MarkerPreviewSheet({ lactario, onViewDetail, onDismiss }
           <X size={18} color={colors.slate[400]} />
         </TouchableOpacity>
 
-        <Text style={styles.name} numberOfLines={1}>{lactario.name}</Text>
+        <View style={styles.nameRow}>
+          <Text style={styles.name} numberOfLines={1}>{lactario.name}</Text>
+          {lactario.placeType && (
+            <View style={[styles.typeBadge, lactario.placeType === 'CAMBIADOR' && styles.typeBadgeCambiador]}>
+              <Text style={[styles.typeBadgeText, lactario.placeType === 'CAMBIADOR' && styles.typeBadgeTextCambiador]}>
+                {lactario.placeType === 'CAMBIADOR' ? '🚼 Cambiador' : '🤱 Lactario'}
+              </Text>
+            </View>
+          )}
+        </View>
 
         <View style={styles.row}>
           <Rating value={lactario.rating || 0} size={14} />
           <Text style={styles.ratingText}>{(lactario.rating || 0).toFixed(1)}</Text>
-          <Text style={styles.reviewCount}>({lactario.reviews?.length || 0} resenas)</Text>
+          <Text style={styles.reviewCount}>({reviewCount} reseñas)</Text>
         </View>
 
         <View style={styles.row}>
@@ -59,6 +69,13 @@ export default function MarkerPreviewSheet({ lactario, onViewDetail, onDismiss }
             {lactario.address || 'Ubicacion no disponible'}
           </Text>
         </View>
+
+        {lactario.access && (
+          <View style={styles.row}>
+            <Users size={14} color={colors.slate[400]} />
+            <Text style={styles.accessText}>{lactario.access}</Text>
+          </View>
+        )}
 
         {amenities.length > 0 && (
           <View style={styles.amenitiesRow}>
@@ -107,10 +124,33 @@ const styles = StyleSheet.create({
     zIndex: 1,
     padding: spacing.xs,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingRight: spacing.xxl,
+  },
   name: {
     ...typography.h4,
     color: colors.slate[800],
-    paddingRight: spacing.xxl,
+    flex: 1,
+  },
+  typeBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radii.full,
+    backgroundColor: '#fff1f2',
+  },
+  typeBadgeCambiador: {
+    backgroundColor: '#ede9fe',
+  },
+  typeBadgeText: {
+    ...typography.caption,
+    color: '#e11d48',
+    fontWeight: '700',
+  },
+  typeBadgeTextCambiador: {
+    color: '#7c3aed',
   },
   row: {
     flexDirection: 'row',
@@ -130,6 +170,10 @@ const styles = StyleSheet.create({
     ...typography.small,
     color: colors.slate[500],
     flex: 1,
+  },
+  accessText: {
+    ...typography.small,
+    color: colors.slate[500],
   },
   amenitiesRow: {
     flexDirection: 'row',

@@ -1,5 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Baby, FeedingSession } from '../types';
+import {
+  getBabiesFromServer,
+  createBabyOnServer,
+  updateBabyOnServer,
+  deleteBabyFromServer,
+  getNursingSessionsFromServer,
+  createNursingSessionOnServer,
+  deleteNursingSessionFromServer,
+} from './api';
 
 const KEYS = {
   sessions: '@Nursing:sessions',
@@ -7,10 +16,51 @@ const KEYS = {
   activeBaby: '@Nursing:activeBaby',
 };
 
+async function hasToken(): Promise<boolean> {
+  const token = await AsyncStorage.getItem('@Auth:token');
+  return !!token;
+}
+
+// Maps a server baby (may have different date format) to frontend Baby type
+function mapServerBaby(b: any): Baby {
+  return {
+    id: b.id,
+    name: b.name,
+    createdAt: b.createdAt,
+  };
+}
+
+// Maps a server nursing session to frontend FeedingSession type
+function mapServerSession(s: any): FeedingSession {
+  return {
+    id: s.id,
+    babyId: s.babyId ?? undefined,
+    startedAt: s.startedAt,
+    endedAt: s.endedAt,
+    leftDuration: s.leftDuration ?? 0,
+    rightDuration: s.rightDuration ?? 0,
+    totalDuration: s.totalDuration ?? 0,
+    totalPauseTime: s.totalPauseTime ?? 0,
+    lastSide: s.lastSide ?? 'both',
+    notes: s.notes ?? '',
+    createdAt: s.createdAt,
+    updatedAt: s.updatedAt ?? s.createdAt,
+  };
+}
+
 // === Sessions ===
 
 export async function getSessions(): Promise<FeedingSession[]> {
   try {
+    if (await hasToken()) {
+      const serverSessions = await getNursingSessionsFromServer();
+      const sessions: FeedingSession[] = serverSessions.map(mapServerSession);
+      // Update local cache
+      await AsyncStorage.setItem(KEYS.sessions, JSON.stringify(sessions));
+      return sessions.sort(
+        (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
+      );
+    }
     const raw = await AsyncStorage.getItem(KEYS.sessions);
     if (!raw) return [];
     const sessions: FeedingSession[] = JSON.parse(raw);
@@ -19,7 +69,13 @@ export async function getSessions(): Promise<FeedingSession[]> {
     );
   } catch (e) {
     console.warn('nursingStorage.getSessions error:', e);
-    return [];
+    // Fallback to local cache on network error
+    try {
+      const raw = await AsyncStorage.getItem(KEYS.sessions);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
   }
 }
 
@@ -30,18 +86,39 @@ export async function getSessionById(id: string): Promise<FeedingSession | null>
 
 export async function saveSession(session: FeedingSession): Promise<void> {
   try {
+    if (await hasToken()) {
+      await createNursingSessionOnServer({
+        babyId: session.babyId,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+        leftDuration: session.leftDuration,
+        rightDuration: session.rightDuration,
+        totalDuration: session.totalDuration,
+        totalPauseTime: session.totalPauseTime,
+        lastSide: session.lastSide,
+        notes: session.notes,
+      });
+      // Refresh cache
+      const serverSessions = await getNursingSessionsFromServer();
+      await AsyncStorage.setItem(KEYS.sessions, JSON.stringify(serverSessions.map(mapServerSession)));
+      return;
+    }
     const sessions = await getSessions();
     sessions.unshift(session);
     await AsyncStorage.setItem(KEYS.sessions, JSON.stringify(sessions));
   } catch (e) {
     console.warn('nursingStorage.saveSession error:', e);
+    // Fallback to local on network error
+    try {
+      const raw = await AsyncStorage.getItem(KEYS.sessions);
+      const sessions: FeedingSession[] = raw ? JSON.parse(raw) : [];
+      sessions.unshift(session);
+      await AsyncStorage.setItem(KEYS.sessions, JSON.stringify(sessions));
+    } catch {}
   }
 }
 
-export async function updateSession(
-  id: string,
-  updates: Partial<FeedingSession>
-): Promise<void> {
+export async function updateSession(id: string, updates: Partial<FeedingSession>): Promise<void> {
   try {
     const sessions = await getSessions();
     const idx = sessions.findIndex((s) => s.id === id);
@@ -55,9 +132,17 @@ export async function updateSession(
 
 export async function deleteSession(id: string): Promise<void> {
   try {
+    if (await hasToken()) {
+      await deleteNursingSessionFromServer(id);
+      const raw = await AsyncStorage.getItem(KEYS.sessions);
+      if (raw) {
+        const sessions: FeedingSession[] = JSON.parse(raw);
+        await AsyncStorage.setItem(KEYS.sessions, JSON.stringify(sessions.filter((s) => s.id !== id)));
+      }
+      return;
+    }
     const sessions = await getSessions();
-    const filtered = sessions.filter((s) => s.id !== id);
-    await AsyncStorage.setItem(KEYS.sessions, JSON.stringify(filtered));
+    await AsyncStorage.setItem(KEYS.sessions, JSON.stringify(sessions.filter((s) => s.id !== id)));
   } catch (e) {
     console.warn('nursingStorage.deleteSession error:', e);
   }
@@ -100,27 +185,58 @@ export async function getTodaySessions(): Promise<FeedingSession[]> {
 
 export async function getBabies(): Promise<Baby[]> {
   try {
+    if (await hasToken()) {
+      const serverBabies = await getBabiesFromServer();
+      const babies: Baby[] = serverBabies.map(mapServerBaby);
+      await AsyncStorage.setItem(KEYS.babies, JSON.stringify(babies));
+      return babies;
+    }
     const raw = await AsyncStorage.getItem(KEYS.babies);
     if (!raw) return [];
     return JSON.parse(raw);
   } catch (e) {
     console.warn('nursingStorage.getBabies error:', e);
-    return [];
+    try {
+      const raw = await AsyncStorage.getItem(KEYS.babies);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
   }
 }
 
-export async function saveBaby(baby: Baby): Promise<void> {
-  try {
-    const babies = await getBabies();
-    babies.push(baby);
+export async function saveBaby(baby: Baby): Promise<Baby> {
+  if (await hasToken()) {
+    const serverBaby = await createBabyOnServer({ name: baby.name });
+    const mapped = mapServerBaby(serverBaby);
+    // Update local cache
+    const raw = await AsyncStorage.getItem(KEYS.babies);
+    const babies: Baby[] = raw ? JSON.parse(raw) : [];
+    babies.push(mapped);
     await AsyncStorage.setItem(KEYS.babies, JSON.stringify(babies));
-  } catch (e) {
-    console.warn('nursingStorage.saveBaby error:', e);
+    return mapped;
   }
+  const babies = await getBabies();
+  babies.push(baby);
+  await AsyncStorage.setItem(KEYS.babies, JSON.stringify(babies));
+  return baby;
 }
 
 export async function updateBaby(id: string, updates: Partial<Baby>): Promise<void> {
   try {
+    if (await hasToken()) {
+      await updateBabyOnServer(id, { name: updates.name });
+      const raw = await AsyncStorage.getItem(KEYS.babies);
+      if (raw) {
+        const babies: Baby[] = JSON.parse(raw);
+        const idx = babies.findIndex((b) => b.id === id);
+        if (idx !== -1) {
+          babies[idx] = { ...babies[idx], ...updates };
+          await AsyncStorage.setItem(KEYS.babies, JSON.stringify(babies));
+        }
+      }
+      return;
+    }
     const babies = await getBabies();
     const idx = babies.findIndex((b) => b.id === id);
     if (idx === -1) return;
@@ -133,9 +249,17 @@ export async function updateBaby(id: string, updates: Partial<Baby>): Promise<vo
 
 export async function deleteBaby(id: string): Promise<void> {
   try {
+    if (await hasToken()) {
+      await deleteBabyFromServer(id);
+      const raw = await AsyncStorage.getItem(KEYS.babies);
+      if (raw) {
+        const babies: Baby[] = JSON.parse(raw);
+        await AsyncStorage.setItem(KEYS.babies, JSON.stringify(babies.filter((b) => b.id !== id)));
+      }
+      return;
+    }
     const babies = await getBabies();
-    const filtered = babies.filter((b) => b.id !== id);
-    await AsyncStorage.setItem(KEYS.babies, JSON.stringify(filtered));
+    await AsyncStorage.setItem(KEYS.babies, JSON.stringify(babies.filter((b) => b.id !== id)));
   } catch (e) {
     console.warn('nursingStorage.deleteBaby error:', e);
   }

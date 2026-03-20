@@ -1,42 +1,207 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView,
+  ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Modal,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
-import { Baby, Mail, Lock, User as UserIcon, Eye, EyeOff } from 'lucide-react-native';
+import {
+  Baby, Mail, Lock, User as UserIcon, Eye, EyeOff,
+  AlertCircle, CheckCircle, X, ArrowLeft, KeyRound,
+} from 'lucide-react-native';
 import { colors, typography, spacing, radii, shadows } from '../theme';
+import api from '../services/api';
+
+type AuthMode = 'login' | 'register';
+type ResetStep = 'email' | 'otp' | 'newPassword';
+
+interface FieldErrors {
+  email?: string;
+  password?: string;
+  name?: string;
+}
 
 export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
+  const { signIn, register, guestLogin } = useAuth();
+
+  // Main auth state
+  const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { signIn, register, guestLogin } = useAuth();
-  const insets = useSafeAreaInsets();
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [globalError, setGlobalError] = useState('');
+
+  // Password reset state
+  const [showReset, setShowReset] = useState(false);
+  const [resetStep, setResetStep] = useState<ResetStep>('email');
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetOtp, setResetOtp] = useState('');
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState('');
+  const [resetSuccess, setResetSuccess] = useState('');
+
+  // --- Validation ---
+  function validateLogin(): boolean {
+    const errs: FieldErrors = {};
+    if (!email.trim()) errs.email = 'Ingresa tu correo';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errs.email = 'Correo inválido';
+    if (!password) errs.password = 'Ingresa tu contraseña';
+    setFieldErrors(errs);
+    return Object.keys(errs).length === 0;
+  }
+
+  function validateRegister(): boolean {
+    const errs: FieldErrors = {};
+    if (!name.trim() || name.trim().length < 2) errs.name = 'El nombre debe tener al menos 2 caracteres';
+    if (!email.trim()) errs.email = 'Ingresa tu correo';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errs.email = 'Correo inválido';
+    if (!password) errs.password = 'Ingresa una contraseña';
+    else if (password.length < 6) errs.password = 'Mínimo 6 caracteres';
+    setFieldErrors(errs);
+    return Object.keys(errs).length === 0;
+  }
 
   const handleAuth = async () => {
-    if (!email || !password || (!isLogin && !name)) {
-      Alert.alert('Error', 'Por favor completa todos los campos');
-      return;
-    }
+    setGlobalError('');
+    const valid = mode === 'login' ? validateLogin() : validateRegister();
+    if (!valid) return;
+
     setLoading(true);
     try {
-      if (isLogin) {
-        await signIn(email, password);
+      if (mode === 'login') {
+        await signIn(email.trim(), password);
       } else {
-        await register(email, password, name);
+        await register(email.trim(), password, name.trim());
       }
     } catch (error: any) {
-      const msg = error.response?.data?.error || 'Error de autenticacion';
-      Alert.alert('Error', msg);
+      const data = error.response?.data;
+      const code = data?.code;
+      const msg = data?.error || 'Error de autenticación';
+
+      if (code === 'USER_NOT_FOUND') {
+        setFieldErrors({ email: 'No existe una cuenta con este correo' });
+      } else if (code === 'WRONG_PASSWORD') {
+        setFieldErrors({ password: msg });
+      } else if (code === 'EMAIL_TAKEN') {
+        setFieldErrors({ email: 'Este correo ya está registrado' });
+      } else if (code === 'INVALID_EMAIL') {
+        setFieldErrors({ email: 'Formato de correo inválido' });
+      } else if (code === 'WEAK_PASSWORD') {
+        setFieldErrors({ password: msg });
+      } else {
+        setGlobalError(msg);
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  const switchMode = () => {
+    setMode(mode === 'login' ? 'register' : 'login');
+    setFieldErrors({});
+    setGlobalError('');
+    setPassword('');
+  };
+
+  // --- Password Reset ---
+  const openReset = () => {
+    setResetEmail(email);
+    setResetOtp('');
+    setResetNewPassword('');
+    setResetError('');
+    setResetSuccess('');
+    setResetStep('email');
+    setShowReset(true);
+  };
+
+  const closeReset = () => {
+    setShowReset(false);
+    setResetStep('email');
+    setResetError('');
+    setResetSuccess('');
+  };
+
+  const handleSendOtp = async () => {
+    if (!resetEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resetEmail.trim())) {
+      setResetError('Ingresa un correo válido');
+      return;
+    }
+    setResetLoading(true);
+    setResetError('');
+    try {
+      await api.post('/auth/forgot-password', { email: resetEmail.trim() });
+      setResetStep('otp');
+    } catch (e: any) {
+      setResetError(e.response?.data?.error || 'Error al enviar el código');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = () => {
+    if (resetOtp.trim().length !== 6) {
+      setResetError('El código debe tener 6 dígitos');
+      return;
+    }
+    setResetError('');
+    setResetStep('newPassword');
+  };
+
+  const handleResetPassword = async () => {
+    if (resetNewPassword.length < 6) {
+      setResetError('La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+    setResetLoading(true);
+    setResetError('');
+    try {
+      await api.post('/auth/reset-password', {
+        email: resetEmail.trim(),
+        otp: resetOtp.trim(),
+        newPassword: resetNewPassword,
+      });
+      setResetSuccess('¡Contraseña actualizada! Ya puedes iniciar sesión.');
+      setEmail(resetEmail);
+      setPassword('');
+      setTimeout(closeReset, 2500);
+    } catch (e: any) {
+      const code = e.response?.data?.code;
+      if (code === 'INVALID_OTP') {
+        setResetStep('otp');
+        setResetError('Código incorrecto. Verifica e intenta de nuevo.');
+      } else if (code === 'OTP_EXPIRED') {
+        setResetStep('email');
+        setResetError('El código expiró. Solicita uno nuevo.');
+      } else {
+        setResetError(e.response?.data?.error || 'Error al restablecer la contraseña');
+      }
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  // --- Render helpers ---
+  const renderFieldError = (msg?: string) =>
+    msg ? (
+      <View style={styles.fieldError}>
+        <AlertCircle size={13} color={colors.error} />
+        <Text style={styles.fieldErrorText}>{msg}</Text>
+      </View>
+    ) : null;
+
+  const inputStyle = (hasError?: boolean) => [
+    styles.inputWrapper,
+    hasError && styles.inputWrapperError,
+  ];
+
+  const stepsDone = { otp: ['email'], newPassword: ['email', 'otp'] } as Record<string, string[]>;
 
   return (
     <KeyboardAvoidingView
@@ -54,61 +219,73 @@ export default function LoginScreen() {
             <Baby size={36} color={colors.white} />
           </View>
           <Text style={styles.brandName}>LactaMap</Text>
-          <Text style={styles.tagline}>
-            Encuentra espacios seguros para ti y tu bebe
-          </Text>
+          <Text style={styles.tagline}>Encuentra espacios seguros para ti y tu bebé</Text>
         </View>
 
         {/* Card */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>
-            {isLogin ? 'Iniciar Sesion' : 'Crear Cuenta'}
+            {mode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'}
           </Text>
 
-          {!isLogin && (
-            <View style={styles.inputWrapper}>
-              <UserIcon size={18} color={colors.slate[400]} />
-              <TextInput
-                style={styles.input}
-                placeholder="Tu nombre"
-                placeholderTextColor={colors.slate[400]}
-                value={name}
-                onChangeText={setName}
-              />
-            </View>
+          {mode === 'register' && (
+            <>
+              <View style={inputStyle(!!fieldErrors.name)}>
+                <UserIcon size={18} color={fieldErrors.name ? colors.error : colors.slate[400]} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Tu nombre"
+                  placeholderTextColor={colors.slate[400]}
+                  value={name}
+                  onChangeText={(t) => { setName(t); setFieldErrors((p) => ({ ...p, name: undefined })); }}
+                />
+              </View>
+              {renderFieldError(fieldErrors.name)}
+            </>
           )}
 
-          <View style={styles.inputWrapper}>
-            <Mail size={18} color={colors.slate[400]} />
+          <View style={inputStyle(!!fieldErrors.email)}>
+            <Mail size={18} color={fieldErrors.email ? colors.error : colors.slate[400]} />
             <TextInput
               style={styles.input}
               placeholder="correo@ejemplo.com"
               placeholderTextColor={colors.slate[400]}
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(t) => { setEmail(t); setFieldErrors((p) => ({ ...p, email: undefined })); }}
               autoCapitalize="none"
               keyboardType="email-address"
             />
           </View>
+          {renderFieldError(fieldErrors.email)}
 
-          <View style={styles.inputWrapper}>
-            <Lock size={18} color={colors.slate[400]} />
+          <View style={inputStyle(!!fieldErrors.password)}>
+            <Lock size={18} color={fieldErrors.password ? colors.error : colors.slate[400]} />
             <TextInput
               style={styles.input}
-              placeholder="Contrasena"
+              placeholder="Contraseña"
               placeholderTextColor={colors.slate[400]}
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(t) => { setPassword(t); setFieldErrors((p) => ({ ...p, password: undefined })); }}
               secureTextEntry={!showPassword}
             />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-              {showPassword ? (
-                <EyeOff size={18} color={colors.slate[400]} />
-              ) : (
-                <Eye size={18} color={colors.slate[400]} />
-              )}
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              {showPassword ? <EyeOff size={18} color={colors.slate[400]} /> : <Eye size={18} color={colors.slate[400]} />}
             </TouchableOpacity>
           </View>
+          {renderFieldError(fieldErrors.password)}
+
+          {mode === 'login' && (
+            <TouchableOpacity style={styles.forgotLink} onPress={openReset}>
+              <Text style={styles.forgotLinkText}>¿Olvidaste tu contraseña?</Text>
+            </TouchableOpacity>
+          )}
+
+          {!!globalError && (
+            <View style={styles.globalError}>
+              <AlertCircle size={16} color={colors.error} />
+              <Text style={styles.globalErrorText}>{globalError}</Text>
+            </View>
+          )}
 
           <TouchableOpacity
             style={[styles.primaryBtn, loading && styles.primaryBtnDisabled]}
@@ -116,159 +293,282 @@ export default function LoginScreen() {
             disabled={loading}
             activeOpacity={0.85}
           >
-            {loading ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
-              <Text style={styles.primaryBtnText}>
-                {isLogin ? 'Iniciar Sesion' : 'Registrarse'}
-              </Text>
-            )}
+            {loading
+              ? <ActivityIndicator color={colors.white} />
+              : <Text style={styles.primaryBtnText}>{mode === 'login' ? 'Iniciar Sesión' : 'Registrarse'}</Text>}
           </TouchableOpacity>
 
           <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>
-              {isLogin ? 'No tienes cuenta? ' : 'Ya tienes cuenta? '}
-            </Text>
-            <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
-              <Text style={styles.switchLink}>
-                {isLogin ? 'Registrate' : 'Inicia sesion'}
-              </Text>
+            <Text style={styles.switchLabel}>{mode === 'login' ? '¿No tienes cuenta? ' : '¿Ya tienes cuenta? '}</Text>
+            <TouchableOpacity onPress={switchMode}>
+              <Text style={styles.switchLink}>{mode === 'login' ? 'Regístrate' : 'Inicia sesión'}</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Guest */}
         <View style={styles.dividerRow}>
           <View style={styles.dividerLine} />
           <Text style={styles.dividerText}>o</Text>
           <View style={styles.dividerLine} />
         </View>
-
         <TouchableOpacity style={styles.guestBtn} onPress={guestLogin} activeOpacity={0.7}>
           <Text style={styles.guestBtnText}>Continuar como invitado</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* ===== Password Reset Modal ===== */}
+      <Modal visible={showReset} transparent animationType="slide" onRequestClose={closeReset}>
+        <TouchableWithoutFeedback onPress={closeReset}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={[styles.modalCard, { paddingBottom: insets.bottom + spacing.xxl }]}>
+                {/* Header */}
+                <View style={styles.modalHeader}>
+                  {resetStep !== 'email' && !resetSuccess ? (
+                    <TouchableOpacity
+                      onPress={() => { setResetStep(resetStep === 'otp' ? 'email' : 'otp'); setResetError(''); }}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <ArrowLeft size={22} color={colors.slate[600]} />
+                    </TouchableOpacity>
+                  ) : <View style={{ width: 22 }} />}
+                  <Text style={styles.modalTitle}>
+                    {resetStep === 'email' && 'Recuperar contraseña'}
+                    {resetStep === 'otp' && 'Verifica tu código'}
+                    {resetStep === 'newPassword' && 'Nueva contraseña'}
+                  </Text>
+                  <TouchableOpacity onPress={closeReset} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <X size={22} color={colors.slate[400]} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Success */}
+                {!!resetSuccess ? (
+                  <View style={styles.resetSuccessBox}>
+                    <CheckCircle size={48} color={colors.success} />
+                    <Text style={styles.resetSuccessText}>{resetSuccess}</Text>
+                  </View>
+                ) : (
+                  <>
+                    {/* Step indicator */}
+                    <View style={styles.stepRow}>
+                      {(['email', 'otp', 'newPassword'] as ResetStep[]).map((s, i) => {
+                        const isDone = stepsDone[resetStep]?.includes(s);
+                        const isActive = resetStep === s;
+                        return (
+                          <View key={s} style={styles.stepItem}>
+                            <View style={[styles.stepDot, isActive && styles.stepDotActive, isDone && styles.stepDotDone]} />
+                            {i < 2 && <View style={[styles.stepLine, isDone && styles.stepLineDone]} />}
+                          </View>
+                        );
+                      })}
+                    </View>
+
+                    {/* Step: Email */}
+                    {resetStep === 'email' && (
+                      <>
+                        <Text style={styles.resetDesc}>
+                          Ingresa el correo de tu cuenta y te enviaremos un código de 6 dígitos.
+                        </Text>
+                        <View style={[styles.inputWrapper, !!resetError && styles.inputWrapperError]}>
+                          <Mail size={18} color={colors.slate[400]} />
+                          <TextInput
+                            style={styles.input}
+                            placeholder="correo@ejemplo.com"
+                            placeholderTextColor={colors.slate[400]}
+                            value={resetEmail}
+                            onChangeText={(t) => { setResetEmail(t); setResetError(''); }}
+                            autoCapitalize="none"
+                            keyboardType="email-address"
+                            autoFocus
+                          />
+                        </View>
+                      </>
+                    )}
+
+                    {/* Step: OTP */}
+                    {resetStep === 'otp' && (
+                      <>
+                        <Text style={styles.resetDesc}>
+                          Ingresa el código de 6 dígitos enviado a{' '}
+                          <Text style={{ fontWeight: '600', color: colors.slate[800] }}>{resetEmail}</Text>.
+                        </Text>
+                        <TextInput
+                          style={[styles.otpInput, !!resetError && { borderColor: colors.error }]}
+                          placeholder="000000"
+                          placeholderTextColor={colors.slate[300]}
+                          value={resetOtp}
+                          onChangeText={(t) => { setResetOtp(t.replace(/\D/g, '').slice(0, 6)); setResetError(''); }}
+                          keyboardType="number-pad"
+                          maxLength={6}
+                          autoFocus
+                        />
+                        <TouchableOpacity onPress={handleSendOtp} style={styles.resendLink}>
+                          <Text style={styles.resendLinkText}>Reenviar código</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+
+                    {/* Step: New Password */}
+                    {resetStep === 'newPassword' && (
+                      <>
+                        <Text style={styles.resetDesc}>Elige una nueva contraseña para tu cuenta.</Text>
+                        <View style={[styles.inputWrapper, !!resetError && styles.inputWrapperError]}>
+                          <KeyRound size={18} color={colors.slate[400]} />
+                          <TextInput
+                            style={styles.input}
+                            placeholder="Nueva contraseña (mín. 6 caracteres)"
+                            placeholderTextColor={colors.slate[400]}
+                            value={resetNewPassword}
+                            onChangeText={(t) => { setResetNewPassword(t); setResetError(''); }}
+                            secureTextEntry={!showResetPassword}
+                            autoFocus
+                          />
+                          <TouchableOpacity onPress={() => setShowResetPassword(!showResetPassword)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                            {showResetPassword ? <EyeOff size={18} color={colors.slate[400]} /> : <Eye size={18} color={colors.slate[400]} />}
+                          </TouchableOpacity>
+                        </View>
+                      </>
+                    )}
+
+                    {/* Error */}
+                    {!!resetError && (
+                      <View style={styles.resetErrorBox}>
+                        <AlertCircle size={14} color={colors.error} />
+                        <Text style={styles.resetErrorText}>{resetError}</Text>
+                      </View>
+                    )}
+
+                    <TouchableOpacity
+                      style={[styles.primaryBtn, { marginTop: spacing.lg }, resetLoading && styles.primaryBtnDisabled]}
+                      onPress={resetStep === 'email' ? handleSendOtp : resetStep === 'otp' ? handleVerifyOtp : handleResetPassword}
+                      disabled={resetLoading}
+                      activeOpacity={0.85}
+                    >
+                      {resetLoading
+                        ? <ActivityIndicator color={colors.white} />
+                        : <Text style={styles.primaryBtnText}>
+                            {resetStep === 'email' && 'Enviar código'}
+                            {resetStep === 'otp' && 'Verificar código'}
+                            {resetStep === 'newPassword' && 'Actualizar contraseña'}
+                          </Text>}
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.primary[50],
-  },
+  container: { flex: 1, backgroundColor: colors.primary[50] },
   scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: spacing.xxl,
-    paddingBottom: spacing.xxxl,
+    flexGrow: 1, paddingHorizontal: spacing.xxl, paddingBottom: spacing.xxxl,
   },
-  brandSection: {
-    alignItems: 'center',
-    marginBottom: spacing.xxxl,
-  },
+  brandSection: { alignItems: 'center', marginBottom: spacing.xxxl },
   iconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 72, height: 72, borderRadius: 36,
     backgroundColor: colors.primary[500],
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.primary,
-    marginBottom: spacing.lg,
+    alignItems: 'center', justifyContent: 'center',
+    ...shadows.primary, marginBottom: spacing.lg,
   },
-  brandName: {
-    ...typography.h1,
-    color: colors.primary[500],
-    marginBottom: spacing.sm,
-  },
-  tagline: {
-    ...typography.small,
-    color: colors.slate[500],
-    textAlign: 'center',
-  },
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: radii.xl,
-    padding: spacing.xxl,
-    ...shadows.xl,
-  },
-  cardTitle: {
-    ...typography.h3,
-    color: colors.slate[800],
-    marginBottom: spacing.xl,
-    textAlign: 'center',
-  },
+  brandName: { ...typography.h1, color: colors.primary[500], marginBottom: spacing.sm },
+  tagline: { ...typography.small, color: colors.slate[500], textAlign: 'center' },
+
+  card: { backgroundColor: colors.white, borderRadius: radii.xl, padding: spacing.xxl, ...shadows.xl },
+  cardTitle: { ...typography.h3, color: colors.slate[800], marginBottom: spacing.xl, textAlign: 'center' },
+
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center',
     backgroundColor: colors.slate[50],
-    borderWidth: 1,
-    borderColor: colors.slate[200],
+    borderWidth: 1, borderColor: colors.slate[200],
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
-    height: 50,
-    gap: spacing.sm,
+    marginBottom: spacing.xs,
+    height: 50, gap: spacing.sm,
   },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: colors.slate[800],
+  inputWrapperError: { borderColor: colors.error, backgroundColor: '#FFF5F5' },
+  input: { flex: 1, fontSize: 16, color: colors.slate[800] },
+
+  fieldError: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.sm, marginTop: 2 },
+  fieldErrorText: { ...typography.caption, color: colors.error },
+
+  forgotLink: { alignSelf: 'flex-end', marginBottom: spacing.md, marginTop: spacing.xs },
+  forgotLinkText: { ...typography.caption, color: colors.primary[500], fontWeight: '600' },
+
+  globalError: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    backgroundColor: '#FFF5F5', borderRadius: radii.md,
+    padding: spacing.md, marginBottom: spacing.md,
+    borderWidth: 1, borderColor: colors.error + '40',
   },
+  globalErrorText: { ...typography.small, color: colors.error, flex: 1 },
+
   primaryBtn: {
-    backgroundColor: colors.primary[500],
-    paddingVertical: 14,
-    borderRadius: radii.md,
-    alignItems: 'center',
-    marginTop: spacing.sm,
-    ...shadows.primary,
+    backgroundColor: colors.primary[500], paddingVertical: 14,
+    borderRadius: radii.md, alignItems: 'center', marginTop: spacing.sm, ...shadows.primary,
   },
-  primaryBtnDisabled: {
-    opacity: 0.7,
-  },
-  primaryBtnText: {
-    ...typography.button,
-    color: colors.white,
-  },
-  switchRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: spacing.xl,
-  },
-  switchLabel: {
-    ...typography.small,
-    color: colors.slate[600],
-  },
-  switchLink: {
-    ...typography.smallBold,
-    color: colors.primary[500],
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: spacing.xxl,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.slate[200],
-  },
-  dividerText: {
-    marginHorizontal: spacing.md,
-    ...typography.caption,
-    color: colors.slate[400],
-  },
+  primaryBtnDisabled: { opacity: 0.7 },
+  primaryBtnText: { ...typography.button, color: colors.white },
+
+  switchRow: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.xl },
+  switchLabel: { ...typography.small, color: colors.slate[600] },
+  switchLink: { ...typography.smallBold, color: colors.primary[500] },
+
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: spacing.xxl },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.slate[200] },
+  dividerText: { marginHorizontal: spacing.md, ...typography.caption, color: colors.slate[400] },
+
   guestBtn: {
+    backgroundColor: colors.white, borderWidth: 1.5,
+    borderColor: colors.slate[200], paddingVertical: 14,
+    borderRadius: radii.md, alignItems: 'center', ...shadows.sm,
+  },
+  guestBtnText: { ...typography.bodyBold, color: colors.slate[600] },
+
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalCard: {
     backgroundColor: colors.white,
-    borderWidth: 1.5,
-    borderColor: colors.slate[200],
-    paddingVertical: 14,
-    borderRadius: radii.md,
-    alignItems: 'center',
-    ...shadows.sm,
+    borderTopLeftRadius: radii.xxl, borderTopRightRadius: radii.xxl,
+    padding: spacing.xxl, minHeight: 380,
   },
-  guestBtnText: {
-    ...typography.bodyBold,
-    color: colors.slate[600],
+  modalHeader: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: spacing.xl,
   },
+  modalTitle: { ...typography.h4, color: colors.slate[800] },
+
+  stepRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xxl },
+  stepItem: { flexDirection: 'row', alignItems: 'center' },
+  stepDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.slate[200] },
+  stepDotActive: { backgroundColor: colors.primary[500], transform: [{ scale: 1.3 }] },
+  stepDotDone: { backgroundColor: colors.success },
+  stepLine: { width: 40, height: 2, backgroundColor: colors.slate[200], marginHorizontal: 4 },
+  stepLineDone: { backgroundColor: colors.success },
+
+  resetDesc: { ...typography.small, color: colors.slate[600], marginBottom: spacing.lg, lineHeight: 20 },
+  otpInput: {
+    ...typography.h1, textAlign: 'center', letterSpacing: 14,
+    borderWidth: 2, borderColor: colors.primary[200],
+    borderRadius: radii.md, paddingVertical: spacing.lg,
+    color: colors.primary[600], backgroundColor: colors.primary[50], marginBottom: spacing.md,
+  },
+  resendLink: { alignSelf: 'center', paddingVertical: spacing.xs },
+  resendLinkText: { ...typography.small, color: colors.primary[500], fontWeight: '600' },
+
+  resetErrorBox: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
+    backgroundColor: '#FFF5F5', borderRadius: radii.md,
+    padding: spacing.md, marginTop: spacing.md,
+    borderWidth: 1, borderColor: colors.error + '40',
+  },
+  resetErrorText: { ...typography.caption, color: colors.error, flex: 1 },
+
+  resetSuccessBox: { alignItems: 'center', gap: spacing.lg, paddingVertical: spacing.xxxl },
+  resetSuccessText: { ...typography.body, color: colors.success, textAlign: 'center', fontWeight: '600' },
 });

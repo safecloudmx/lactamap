@@ -1,32 +1,98 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  Image, ActivityIndicator, Alert, StyleSheet,
+  Image, ActivityIndicator, Alert, StyleSheet, Modal,
+  ActionSheetIOS, Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Camera, Check, Sparkles } from 'lucide-react-native';
+import { Camera, Check, ImagePlus, AlertTriangle, Plus, X, MapPin } from 'lucide-react-native';
 import { Amenity, GenderAccess } from '../types';
 import { AMENITY_LABELS } from '../constants';
 import { createLactario } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { colors, spacing, typography, radii, shadows } from '../theme';
 import { AppHeader, Chip, LoadingOverlay } from '../components/ui';
 
 let Location: any = null;
-try {
-  Location = require('expo-location');
-} catch (_) {}
+try { Location = require('expo-location'); } catch (_) {}
+
+let ImagePicker: any = null;
+try { ImagePicker = require('expo-image-picker'); } catch (_) {}
+
+let RNMaps: any = null;
+try { RNMaps = require('react-native-maps'); } catch (_) {}
+
+const ADMIN_ROLES = ['ADMIN', 'ELITE'];
+
+// Changer-specific specifications (separate from lactario amenities)
+const CHANGER_SPECS = ['Dentro de un Baño', 'Abierto', 'Privado', 'Lavabo', 'Climatizado'];
+
+async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+      { headers: { 'Accept-Language': 'es' } }
+    );
+    const data = await res.json();
+    return data?.display_name || null;
+  } catch {}
+  return null;
+}
+
+function buildMapPickerHtml(lat: number, lng: number) {
+  return `<!DOCTYPE html><html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
+<style>html,body,#map{margin:0;padding:0;width:100%;height:100%;}
+#hint{position:absolute;top:10px;left:50%;transform:translateX(-50%);
+  background:rgba(255,255,255,0.92);padding:6px 14px;border-radius:20px;
+  font-family:sans-serif;font-size:13px;color:#334155;z-index:999;
+  box-shadow:0 2px 8px rgba(0,0,0,0.15);pointer-events:none;white-space:nowrap;}</style>
+</head><body>
+<div id="hint">Toca el mapa para colocar el marcador</div>
+<div id="map"></div>
+<script>
+var map=L.map('map',{zoomControl:false}).setView([${lat},${lng}],15);
+L.control.zoom({position:'bottomright'}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap',maxZoom:19}).addTo(map);
+var marker=L.marker([${lat},${lng}],{draggable:true}).addTo(map);
+function notify(ll){window.parent.postMessage({type:'pinMoved',lat:ll.lat,lng:ll.lng},'*');}
+notify(marker.getLatLng());
+marker.on('dragend',function(){notify(marker.getLatLng());});
+map.on('click',function(e){marker.setLatLng(e.latlng);notify(e.latlng);});
+<\/script></body></html>`;
+}
+
+type PlaceType = 'LACTARIO' | 'CAMBIADOR';
 
 export default function AddRoomScreen() {
   const navigation = useNavigation<any>();
+  const { user } = useAuth();
+  const isPrivileged = ADMIN_ROLES.includes(user?.role ?? '');
+
+  const [placeType, setPlaceType] = useState<PlaceType | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [address, setAddress] = useState('');
   const [access, setAccess] = useState<GenderAccess>(GenderAccess.NEUTRAL);
   const [selectedAmenities, setSelectedAmenities] = useState<Amenity[]>([]);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [selectedSpecs, setSelectedSpecs] = useState<string[]>([]);
+  const [imageUri, setImageUri] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [showConsent, setShowConsent] = useState(false);
+
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+
   const [currentLocation, setCurrentLocation] = useState({ latitude: 25.6866, longitude: -100.3161 });
+  const [pickedLocation, setPickedLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [pickerCoords, setPickerCoords] = useState({ latitude: 25.6866, longitude: -100.3161 });
+  const mapPickerIframeRef = useRef<any>(null);
+  const fileInputRef = useRef<any>(null);
+
+  const effectiveLocation = pickedLocation ?? currentLocation;
 
   useEffect(() => {
     if (!Location) return;
@@ -34,19 +100,107 @@ export default function AddRoomScreen() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') return;
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      setCurrentLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+      const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+      setCurrentLocation(coords);
+      setPickerCoords(coords);
     })();
   }, []);
 
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === 'pinMoved') {
+        setPickerCoords({ latitude: event.data.lat, longitude: event.data.lng });
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  // Photo picker
+  const pickFromGalleryNative = async () => {
+    if (!ImagePicker) { Alert.alert('No disponible', 'Ejecuta: npx expo install expo-image-picker'); return; }
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('Permiso denegado', 'Se necesita acceso a la galería.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [16, 9], quality: 0.8 });
+    if (!result.canceled && result.assets[0]) setImageUri(result.assets[0].uri);
+  };
+
+  const takePhotoNative = async () => {
+    if (!ImagePicker) { Alert.alert('No disponible', 'Ejecuta: npx expo install expo-image-picker'); return; }
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('Permiso denegado', 'Se necesita acceso a la cámara.'); return; }
+    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [16, 9], quality: 0.8 });
+    if (!result.canceled && result.assets[0]) setImageUri(result.assets[0].uri);
+  };
+
   const handleImagePick = () => {
-    setImagePreview('https://picsum.photos/400/300');
-    setIsAnalyzing(true);
-    setTimeout(() => {
-      setIsAnalyzing(false);
-      setDescription('Espacio limpio y comodo detectado. Cuenta con cambiador y silla de lactancia.');
-      setSelectedAmenities([Amenity.CHANGING_TABLE, Amenity.LACTATION_CHAIR]);
-      setAccess(GenderAccess.WOMEN);
-    }, 2000);
+    if (Platform.OS === 'web') { fileInputRef.current?.click(); return; }
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: ['Cancelar', 'Tomar foto', 'Elegir de galería'], cancelButtonIndex: 0 },
+        (i) => { if (i === 1) takePhotoNative(); else if (i === 2) pickFromGalleryNative(); }
+      );
+    } else {
+      Alert.alert('Agregar foto', 'Elige una opción', [
+        { text: 'Tomar foto', onPress: takePhotoNative },
+        { text: 'Elegir de galería', onPress: pickFromGalleryNative },
+        { text: 'Cancelar', style: 'cancel' },
+      ]);
+    }
+  };
+
+  // Tags
+  const addTag = () => {
+    const t = tagInput.trim().toLowerCase();
+    if (t && !tags.includes(t)) setTags([...tags, t]);
+    setTagInput('');
+  };
+  const removeTag = (t: string) => setTags(tags.filter((x) => x !== t));
+
+  // Map picker
+  const handleMapPickerConfirm = async () => {
+    setPickedLocation(pickerCoords);
+    setShowMapPicker(false);
+    const addr = await reverseGeocode(pickerCoords.latitude, pickerCoords.longitude);
+    if (addr) setAddress(addr);
+  };
+
+  // Save
+  const canSave = placeType !== null && name.trim().length >= 3;
+
+  const handleSavePress = () => {
+    if (!canSave) return;
+    setShowConsent(true);
+  };
+
+  const handleConsentConfirm = async () => {
+    setShowConsent(false);
+    setIsSaving(true);
+    try {
+      const amenities = placeType === 'CAMBIADOR' ? selectedSpecs : selectedAmenities.map(String);
+      const result = await createLactario({
+        name: name.trim(),
+        latitude: effectiveLocation.latitude,
+        longitude: effectiveLocation.longitude,
+        address: address.trim() || undefined,
+        description: description.trim(),
+        amenities,
+        tags,
+        placeType: placeType!,
+      });
+      Alert.alert(
+        result.requiresReview ? 'Enviado para revisión' : '¡Publicado!',
+        result.requiresReview
+          ? 'Tu aporte fue enviado y será publicado tras ser aprobado por un moderador.'
+          : 'El lugar fue publicado exitosamente.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+    } catch (error: any) {
+      Alert.alert('Error', error.response?.data?.error || 'Error al guardar');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const toggleAmenity = (amenity: Amenity) => {
@@ -55,274 +209,360 @@ export default function AddRoomScreen() {
     );
   };
 
-  const handleSave = async () => {
-    if (!name.trim() || name.trim().length < 3) {
-      Alert.alert('Error', 'El nombre debe tener al menos 3 caracteres');
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      await createLactario({
-        name: name.trim(),
-        latitude: currentLocation.latitude,
-        longitude: currentLocation.longitude,
-        address: address.trim() || 'Ubicacion actual',
-        description: description.trim(),
-        amenities: selectedAmenities,
-      });
-      Alert.alert('Listo', 'Lactario registrado exitosamente', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
-    } catch (error: any) {
-      const msg = error.response?.data?.error || 'Error al guardar';
-      Alert.alert('Error', msg);
-    } finally {
-      setIsSaving(false);
-    }
+  const toggleSpec = (spec: string) => {
+    setSelectedSpecs((prev) =>
+      prev.includes(spec) ? prev.filter((s) => s !== spec) : [...prev, spec]
+    );
   };
+
+  const MapViewComp = RNMaps?.default;
+  const RNMarker = RNMaps?.Marker;
 
   return (
     <View style={styles.container}>
       <AppHeader
-        title="Nuevo Lactario"
+        title="Nueva Ubicación"
         onBack={() => navigation.goBack()}
         rightAction={
-          <TouchableOpacity onPress={handleSave} disabled={isSaving || name.trim().length < 3}>
-            {isSaving ? (
-              <ActivityIndicator size="small" color={colors.primary[500]} />
-            ) : (
-              <Text style={[
-                styles.saveText,
-                name.trim().length < 3 && styles.saveTextDisabled,
-              ]}>Guardar</Text>
-            )}
+          <TouchableOpacity onPress={handleSavePress} disabled={!canSave}>
+            {isSaving
+              ? <ActivityIndicator size="small" color={colors.primary[500]} />
+              : <Text style={[styles.saveText, !canSave && styles.saveTextDisabled]}>Guardar</Text>
+            }
           </TouchableOpacity>
         }
       />
 
-      {isSaving && <LoadingOverlay message="Guardando lactario..." />}
+      {isSaving && <LoadingOverlay message="Guardando..." />}
+
+      {/* Hidden web file input */}
+      {Platform.OS === 'web' && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' } as any}
+          onChange={(e: any) => {
+            const file = e.target.files?.[0];
+            if (file) setImageUri(URL.createObjectURL(file));
+            e.target.value = '';
+          }}
+        />
+      )}
+
+      {/* Consent Modal */}
+      <Modal visible={showConsent} transparent animationType="fade" onRequestClose={() => setShowConsent(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconRow}><AlertTriangle size={28} color={colors.warning} /></View>
+            <Text style={styles.modalTitle}>Declaración de consentimiento</Text>
+            <View style={styles.bulletList}>
+              <Text style={styles.bullet}>• Las imágenes <Text style={styles.bold}>no contienen personas</Text>, rostros ni datos personales.</Text>
+              <Text style={styles.bullet}>• Las fotos muestran únicamente el espacio físico.</Text>
+              <Text style={styles.bullet}>• La información proporcionada es verídica.</Text>
+            </View>
+            <Text style={styles.modalWarning}>
+              El incumplimiento puede resultar en una <Text style={styles.bold}>suspensión temporal o permanente</Text> de tu cuenta.
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowConsent(false)}>
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmBtn} onPress={handleConsentConfirm}>
+                <Text style={styles.confirmBtnText}>Acepto y envío</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Map Picker Modal */}
+      <Modal visible={showMapPicker} transparent animationType="slide" onRequestClose={() => setShowMapPicker(false)}>
+        <View style={styles.pickerModalContainer}>
+          <View style={styles.pickerModalHeader}>
+            <Text style={styles.pickerModalTitle}>Seleccionar ubicación</Text>
+            <TouchableOpacity onPress={() => setShowMapPicker(false)}>
+              <X size={22} color={colors.slate[600]} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.pickerMapContainer}>
+            {Platform.OS === 'web' ? (
+              <iframe
+                ref={mapPickerIframeRef}
+                srcDoc={buildMapPickerHtml(pickerCoords.latitude, pickerCoords.longitude)}
+                allow="geolocation"
+                style={{ width: '100%', height: '100%', border: 'none' } as any}
+                title="Seleccionar ubicación"
+              />
+            ) : MapViewComp ? (
+              <MapViewComp
+                style={{ flex: 1 }}
+                initialRegion={{ latitude: pickerCoords.latitude, longitude: pickerCoords.longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 }}
+                onPress={(e: any) => setPickerCoords({ latitude: e.nativeEvent.coordinate.latitude, longitude: e.nativeEvent.coordinate.longitude })}
+              >
+                <RNMarker coordinate={pickerCoords} draggable
+                  onDragEnd={(e: any) => setPickerCoords({ latitude: e.nativeEvent.coordinate.latitude, longitude: e.nativeEvent.coordinate.longitude })}
+                />
+              </MapViewComp>
+            ) : (
+              <View style={styles.mapUnavailable}><Text style={{ color: colors.slate[400] }}>Mapa no disponible</Text></View>
+            )}
+          </View>
+          <View style={styles.pickerCoordsRow}>
+            <MapPin size={14} color={colors.slate[500]} />
+            <Text style={styles.pickerCoordsText}>{pickerCoords.latitude.toFixed(5)}, {pickerCoords.longitude.toFixed(5)}</Text>
+          </View>
+          <TouchableOpacity style={styles.pickerConfirmBtn} onPress={handleMapPickerConfirm}>
+            <Check size={18} color={colors.white} />
+            <Text style={styles.pickerConfirmText}>Confirmar ubicación</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Photo */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Foto del lugar</Text>
-          <TouchableOpacity onPress={handleImagePick} style={styles.imagePicker}>
-            {imagePreview ? (
-              <View style={styles.imageWrapper}>
-                <Image source={{ uri: imagePreview }} style={styles.previewImage} />
-                {isAnalyzing && (
-                  <View style={styles.analyzingOverlay}>
-                    <View style={styles.analyzingBadge}>
-                      <ActivityIndicator size="small" color={colors.primary[500]} />
-                      <Text style={styles.analyzingText}>Analizando con IA...</Text>
+
+        {/* Type Selector */}
+        <View style={styles.typeSelectorRow}>
+          <TouchableOpacity
+            style={[styles.typeCard, placeType === 'LACTARIO' && styles.typeCardSelected]}
+            onPress={() => setPlaceType('LACTARIO')}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.typeEmoji}>🤱</Text>
+            <Text style={[styles.typeCardTitle, placeType === 'LACTARIO' && styles.typeCardTitleSelected]}>Lactario</Text>
+            <Text style={[styles.typeCardDesc, placeType === 'LACTARIO' && styles.typeCardDescSelected]}>Sala de lactancia</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.typeCard, placeType === 'CAMBIADOR' && styles.typeCardSelected]}
+            onPress={() => setPlaceType('CAMBIADOR')}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.typeEmoji}>🚼</Text>
+            <Text style={[styles.typeCardTitle, placeType === 'CAMBIADOR' && styles.typeCardTitleSelected]}>Cambiador</Text>
+            <Text style={[styles.typeCardDesc, placeType === 'CAMBIADOR' && styles.typeCardDescSelected]}>Mesa para pañal</Text>
+          </TouchableOpacity>
+        </View>
+
+        {placeType !== null && (
+          <>
+            {/* Photo */}
+            <View style={styles.section}>
+              <Text style={styles.label}>Foto del lugar</Text>
+              <TouchableOpacity onPress={handleImagePick} style={styles.imagePicker}>
+                {imageUri ? (
+                  <Image source={{ uri: imageUri }} style={styles.previewImage} />
+                ) : (
+                  <View style={styles.placeholder}>
+                    <View style={styles.cameraIconBg}><Camera size={24} color={colors.primary[500]} /></View>
+                    <Text style={styles.placeholderText}>Toca para agregar foto</Text>
+                    <View style={styles.photoOptions}>
+                      <View style={styles.photoOption}>
+                        <Camera size={14} color={colors.slate[500]} />
+                        <Text style={styles.photoOptionText}>Cámara</Text>
+                      </View>
+                      <View style={styles.photoOptionDivider} />
+                      <View style={styles.photoOption}>
+                        <ImagePlus size={14} color={colors.slate[500]} />
+                        <Text style={styles.photoOptionText}>Galería</Text>
+                      </View>
                     </View>
                   </View>
                 )}
+              </TouchableOpacity>
+              {imageUri && (
+                <TouchableOpacity onPress={handleImagePick} style={styles.changePhotoBtn}>
+                  <Text style={styles.changePhotoText}>Cambiar foto</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Name */}
+            <View style={styles.section}>
+              <Text style={styles.label}>Nombre del lugar *</Text>
+              <TextInput style={styles.input} placeholder="Ej. Sala de lactancia de Valle Poniente"
+                placeholderTextColor={colors.slate[400]} value={name} onChangeText={setName} />
+            </View>
+
+            {/* Address + Map Picker */}
+            <View style={styles.section}>
+              <Text style={styles.label}>Dirección</Text>
+              <TextInput
+                style={[styles.input, !isPrivileged && styles.inputDisabled]}
+                placeholder="Selecciona en el mapa para autocompletar"
+                placeholderTextColor={colors.slate[400]}
+                value={address}
+                onChangeText={isPrivileged ? setAddress : undefined}
+                editable={isPrivileged}
+              />
+              <TouchableOpacity style={styles.mapPickerBtn} onPress={() => setShowMapPicker(true)}>
+                <MapPin size={16} color={colors.primary[500]} />
+                <Text style={styles.mapPickerBtnText}>Seleccionar en el mapa</Text>
+                {pickedLocation && <Check size={14} color={colors.success} style={{ marginLeft: 'auto' } as any} />}
+              </TouchableOpacity>
+            </View>
+
+            {/* Description */}
+            <View style={styles.section}>
+              <Text style={styles.label}>Descripción</Text>
+              <TextInput style={[styles.input, styles.textArea]}
+                placeholder="¿Cómo es el espacio? ¿Es limpio, privado?"
+                placeholderTextColor={colors.slate[400]} multiline numberOfLines={3}
+                value={description} onChangeText={setDescription} />
+            </View>
+
+            {/* Tags */}
+            <View style={styles.section}>
+              <Text style={styles.label}>
+                Etiquetas <Text style={styles.labelOptional}>(opcional)</Text>
+              </Text>
+              <Text style={styles.tagHint}>Facilitan la búsqueda (ej: "liverpool", "apodaca")</Text>
+              <View style={styles.tagInputRow}>
+                <TextInput
+                  style={[styles.input, styles.tagInput]}
+                  placeholder="Añadir etiqueta"
+                  placeholderTextColor={colors.slate[400]}
+                  value={tagInput}
+                  onChangeText={setTagInput}
+                  returnKeyType="done"
+                  onSubmitEditing={addTag}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity style={styles.addTagBtn} onPress={addTag}>
+                  <Plus size={18} color={colors.white} />
+                </TouchableOpacity>
               </View>
-            ) : (
-              <View style={styles.placeholder}>
-                <View style={styles.cameraIconBg}>
-                  <Camera size={24} color={colors.primary[500]} />
+              {tags.length > 0 && (
+                <View style={styles.tagsRow}>
+                  {tags.map((t) => (
+                    <TouchableOpacity key={t} style={styles.tagChip} onPress={() => removeTag(t)}>
+                      <Text style={styles.tagChipText}>{t}</Text>
+                      <X size={10} color={colors.primary[500]} />
+                    </TouchableOpacity>
+                  ))}
                 </View>
-                <Text style={styles.placeholderText}>Toca para tomar foto</Text>
+              )}
+            </View>
+
+            {/* Access */}
+            <View style={styles.section}>
+              <Text style={styles.label}>Acceso</Text>
+              <View style={styles.chipsRow}>
+                {Object.values(GenderAccess).map((type) => (
+                  <Chip key={type} label={type} selected={access === type} onPress={() => setAccess(type)} />
+                ))}
+              </View>
+            </View>
+
+            {/* Lactario: full amenities */}
+            {placeType === 'LACTARIO' && (
+              <View style={styles.section}>
+                <Text style={styles.label}>Servicios disponibles</Text>
+                <View style={styles.chipsRow}>
+                  {Object.values(Amenity).map((amenity) => (
+                    <Chip key={amenity} label={AMENITY_LABELS[amenity] || amenity}
+                      selected={selectedAmenities.includes(amenity)} onPress={() => toggleAmenity(amenity)}
+                      icon={selectedAmenities.includes(amenity) ? <Check size={12} color={colors.white} /> : undefined}
+                      size="sm" />
+                  ))}
+                </View>
               </View>
             )}
-          </TouchableOpacity>
 
-          {imagePreview && !isAnalyzing && (
-            <View style={styles.aiBadge}>
-              <Sparkles size={12} color={colors.success} />
-              <Text style={styles.aiText}>IA detecto servicios automaticamente</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Name */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Nombre del lugar *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Ej. Sala de lactancia Liverpool"
-            placeholderTextColor={colors.slate[400]}
-            value={name}
-            onChangeText={setName}
-          />
-        </View>
-
-        {/* Address */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Direccion</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Ej. Av. Constitucion 123, Nivel 2"
-            placeholderTextColor={colors.slate[400]}
-            value={address}
-            onChangeText={setAddress}
-          />
-        </View>
-
-        {/* Description */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Descripcion</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Como es el espacio? Es limpio, privado?"
-            placeholderTextColor={colors.slate[400]}
-            multiline
-            numberOfLines={3}
-            value={description}
-            onChangeText={setDescription}
-          />
-        </View>
-
-        {/* Access */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Acceso</Text>
-          <View style={styles.chipsRow}>
-            {Object.values(GenderAccess).map((type) => (
-              <Chip
-                key={type}
-                label={type}
-                selected={access === type}
-                onPress={() => setAccess(type)}
-              />
-            ))}
-          </View>
-        </View>
-
-        {/* Amenities */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Servicios disponibles</Text>
-          <View style={styles.chipsRow}>
-            {Object.values(Amenity).map((amenity) => (
-              <Chip
-                key={amenity}
-                label={AMENITY_LABELS[amenity] || amenity}
-                selected={selectedAmenities.includes(amenity)}
-                onPress={() => toggleAmenity(amenity)}
-                icon={selectedAmenities.includes(amenity) ? <Check size={12} color={colors.white} /> : undefined}
-                size="sm"
-              />
-            ))}
-          </View>
-        </View>
+            {/* Cambiador: specifications */}
+            {placeType === 'CAMBIADOR' && (
+              <View style={styles.section}>
+                <Text style={styles.label}>Especificaciones</Text>
+                <View style={styles.chipsRow}>
+                  {CHANGER_SPECS.map((spec) => (
+                    <Chip key={spec} label={spec}
+                      selected={selectedSpecs.includes(spec)} onPress={() => toggleSpec(spec)}
+                      icon={selectedSpecs.includes(spec) ? <Check size={12} color={colors.white} /> : undefined}
+                      size="sm" />
+                  ))}
+                </View>
+              </View>
+            )}
+          </>
+        )}
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.white,
-  },
-  saveText: {
-    ...typography.bodyBold,
-    color: colors.primary[500],
-  },
-  saveTextDisabled: {
-    color: colors.slate[300],
-  },
-  content: {
-    padding: spacing.xxl,
-    paddingBottom: 100,
-  },
-  section: {
-    marginBottom: spacing.xxl,
-  },
-  label: {
-    ...typography.smallBold,
-    color: colors.slate[700],
-    marginBottom: spacing.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  input: {
-    backgroundColor: colors.slate[50],
-    borderWidth: 1,
-    borderColor: colors.slate[200],
-    borderRadius: radii.md,
-    padding: spacing.md,
-    fontSize: 16,
-    color: colors.slate[800],
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  chipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  imagePicker: {
-    width: '100%',
-    aspectRatio: 16 / 9,
-    borderRadius: radii.lg,
-    borderWidth: 2,
-    borderColor: colors.slate[200],
-    borderStyle: 'dashed',
-    overflow: 'hidden',
-  },
-  placeholder: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  container: { flex: 1, backgroundColor: colors.white },
+  saveText: { ...typography.bodyBold, color: colors.primary[500] },
+  saveTextDisabled: { color: colors.slate[300] },
+  content: { padding: spacing.xxl, paddingBottom: 100 },
+  section: { marginBottom: spacing.xxl },
+  label: { ...typography.smallBold, color: colors.slate[700], marginBottom: spacing.sm, textTransform: 'uppercase', letterSpacing: 0.5 },
+  labelOptional: { fontSize: 11, color: colors.slate[400], textTransform: 'none', fontWeight: '400' },
+  input: { backgroundColor: colors.slate[50], borderWidth: 1, borderColor: colors.slate[200], borderRadius: radii.md, padding: spacing.md, fontSize: 16, color: colors.slate[800] },
+  inputDisabled: { backgroundColor: colors.slate[100], color: colors.slate[500] },
+  textArea: { height: 100, textAlignVertical: 'top' },
+  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+
+  // Type selector
+  typeSelectorRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xxl },
+  typeCard: {
+    flex: 1, alignItems: 'center', padding: spacing.lg,
+    borderRadius: radii.lg, borderWidth: 2, borderColor: colors.slate[200],
     backgroundColor: colors.slate[50],
   },
-  cameraIconBg: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.primary[50],
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  placeholderText: {
-    ...typography.small,
-    color: colors.slate[500],
-  },
-  imageWrapper: {
-    width: '100%',
-    height: '100%',
-  },
-  previewImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  analyzingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  analyzingBadge: {
-    flexDirection: 'row',
-    backgroundColor: colors.white,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.full,
-    gap: spacing.sm,
-    alignItems: 'center',
-  },
-  analyzingText: {
-    ...typography.captionBold,
-    color: colors.primary[500],
-  },
-  aiBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.successLight,
-    padding: spacing.sm,
-    borderRadius: radii.sm,
-    marginTop: spacing.sm,
-    gap: spacing.xs,
-  },
-  aiText: {
-    ...typography.caption,
-    color: colors.success,
-  },
+  typeCardSelected: { borderColor: colors.primary[500], backgroundColor: colors.primary[50] },
+  typeEmoji: { fontSize: 32, marginBottom: spacing.sm },
+  typeCardTitle: { ...typography.bodyBold, color: colors.slate[700] },
+  typeCardTitleSelected: { color: colors.primary[600] },
+  typeCardDesc: { ...typography.caption, color: colors.slate[400], marginTop: 2, textAlign: 'center' },
+  typeCardDescSelected: { color: colors.primary[400] },
+
+  // Photo
+  imagePicker: { width: '100%', aspectRatio: 16 / 9, borderRadius: radii.lg, borderWidth: 2, borderColor: colors.slate[200], borderStyle: 'dashed', overflow: 'hidden' },
+  placeholder: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.slate[50], gap: spacing.xs },
+  cameraIconBg: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.primary[50], justifyContent: 'center', alignItems: 'center', marginBottom: spacing.xs },
+  placeholderText: { ...typography.small, color: colors.slate[500] },
+  photoOptions: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs },
+  photoOption: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  photoOptionDivider: { width: 1, height: 14, backgroundColor: colors.slate[300], marginHorizontal: spacing.sm },
+  photoOptionText: { ...typography.caption, color: colors.slate[500] },
+  previewImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  changePhotoBtn: { marginTop: spacing.sm, alignSelf: 'flex-end' },
+  changePhotoText: { ...typography.caption, color: colors.primary[500], textDecorationLine: 'underline' },
+
+  // Address / Map picker
+  mapPickerBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.primary[300], borderRadius: radii.md, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, backgroundColor: colors.primary[50], marginTop: spacing.sm },
+  mapPickerBtnText: { ...typography.small, color: colors.primary[600], fontWeight: '600' },
+
+  // Tags
+  tagHint: { ...typography.caption, color: colors.slate[400], marginBottom: spacing.sm },
+  tagInputRow: { flexDirection: 'row', gap: spacing.sm },
+  tagInput: { flex: 1 },
+  addTagBtn: { width: 46, height: 46, borderRadius: radii.md, backgroundColor: colors.primary[500], alignItems: 'center', justifyContent: 'center' },
+  tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
+  tagChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primary[50], paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radii.full, borderWidth: 1, borderColor: colors.primary[200] },
+  tagChipText: { ...typography.caption, color: colors.primary[600], fontWeight: '600' },
+
+  // Modals
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: spacing.xxl },
+  modalCard: { backgroundColor: colors.white, borderRadius: radii.xl, padding: spacing.xxl, width: '100%', ...shadows.lg },
+  modalIconRow: { alignItems: 'center', marginBottom: spacing.md },
+  modalTitle: { ...typography.h3, color: colors.slate[800], textAlign: 'center', marginBottom: spacing.sm },
+  bulletList: { gap: spacing.sm, marginBottom: spacing.md },
+  bullet: { ...typography.small, color: colors.slate[600], lineHeight: 20 },
+  bold: { fontWeight: '700', color: colors.slate[800] },
+  modalWarning: { ...typography.small, color: colors.error, backgroundColor: colors.errorLight, padding: spacing.md, borderRadius: radii.md, marginBottom: spacing.xl, lineHeight: 20 },
+  modalActions: { flexDirection: 'row', gap: spacing.md },
+  cancelBtn: { flex: 1, paddingVertical: spacing.md, borderRadius: radii.md, borderWidth: 1, borderColor: colors.slate[300], alignItems: 'center' },
+  cancelBtnText: { ...typography.bodyBold, color: colors.slate[600] },
+  confirmBtn: { flex: 1, paddingVertical: spacing.md, borderRadius: radii.md, backgroundColor: colors.primary[500], alignItems: 'center' },
+  confirmBtnText: { ...typography.bodyBold, color: colors.white },
+  pickerModalContainer: { flex: 1, backgroundColor: colors.white, marginTop: 60, borderTopLeftRadius: radii.xxl, borderTopRightRadius: radii.xxl },
+  pickerModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.xxl, borderBottomWidth: 1, borderBottomColor: colors.slate[100] },
+  pickerModalTitle: { ...typography.h4, color: colors.slate[800] },
+  pickerMapContainer: { flex: 1 },
+  mapUnavailable: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  pickerCoordsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.xxl, paddingVertical: spacing.md, backgroundColor: colors.slate[50] },
+  pickerCoordsText: { ...typography.caption, color: colors.slate[600] },
+  pickerConfirmBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, backgroundColor: colors.primary[500], margin: spacing.xxl, padding: spacing.lg, borderRadius: radii.lg },
+  pickerConfirmText: { ...typography.bodyBold, color: colors.white },
 });

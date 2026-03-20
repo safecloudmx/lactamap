@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,8 +11,13 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
+  Modal,
+  StatusBar,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -30,11 +35,19 @@ import {
   MessageSquare,
   Send,
   LogIn,
+  Pencil,
+  Trash2,
+  Flag,
+  Users,
+  Tag,
+  UserCircle,
+  EyeOff,
+  X,
 } from 'lucide-react-native';
 import { Lactario, Review } from '../types';
-import { getLactarioById, getReviews, createReview } from '../services/api';
+import { getLactarioById, getReviews, createReview, updateReview, deleteReview, reportReview } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Rating, StatusBadge, Card, AvatarInitials } from '../components/ui';
+import { Rating, Card, AvatarInitials } from '../components/ui';
 import { colors, spacing, typography, radii, shadows } from '../theme';
 
 const AMENITY_ICONS: Record<string, React.ComponentType<any>> = {
@@ -66,6 +79,18 @@ export default function RoomDetailScreen() {
   const [reviewComment, setReviewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const photoScrollRef = useRef<ScrollView>(null);
+  const [lightboxVisible, setLightboxVisible] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const lightboxScrollRef = useRef<ScrollView>(null);
+
+  // Edit review state
+  const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
+  const [editRating, setEditRating] = useState(0);
+  const [editComment, setEditComment] = useState('');
+  const [editSubmitting, setEditSubmitting] = useState(false);
+
   const fetchDetails = useCallback(async () => {
     try {
       const [roomData, reviewsData] = await Promise.all([
@@ -82,6 +107,13 @@ export default function RoomDetailScreen() {
   useEffect(() => {
     fetchDetails();
   }, [fetchDetails]);
+
+  // Refresh data when returning from EditRoom
+  useFocusEffect(
+    useCallback(() => {
+      fetchDetails();
+    }, [fetchDetails])
+  );
 
   const handleSubmitReview = async () => {
     if (reviewRating === 0) {
@@ -111,9 +143,83 @@ export default function RoomDetailScreen() {
     }
   };
 
+  const handleEditReview = (review: Review) => {
+    setEditingReviewId(review.id);
+    setEditRating(review.rating);
+    setEditComment(review.comment || '');
+  };
+
+  const handleSaveEditReview = async () => {
+    if (!editingReviewId || editRating === 0) return;
+    setEditSubmitting(true);
+    try {
+      await updateReview(editingReviewId, { rating: editRating, comment: editComment.trim() });
+      setEditingReviewId(null);
+      fetchDetails();
+    } catch (error: any) {
+      Alert.alert('Error', error?.response?.data?.error || 'No se pudo actualizar la reseña.');
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  const handleDeleteReview = (reviewId: string) => {
+    Alert.alert('Eliminar reseña', '¿Estás seguro de que deseas eliminar esta reseña?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar', style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteReview(reviewId);
+            fetchDetails();
+          } catch {
+            Alert.alert('Error', 'No se pudo eliminar la reseña.');
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleReportReview = (reviewId: string) => {
+    Alert.alert('Reportar reseña', '¿Por qué quieres reportar esta reseña?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Contenido inapropiado', onPress: () => submitReport(reviewId, 'Contenido inapropiado') },
+      { text: 'Información falsa', onPress: () => submitReport(reviewId, 'Información falsa') },
+      { text: 'Spam', onPress: () => submitReport(reviewId, 'Spam') },
+    ]);
+  };
+
+  const submitReport = async (reviewId: string, reason: string) => {
+    try {
+      await reportReview(reviewId, reason);
+      Alert.alert('Reportado', 'Gracias, la reseña será revisada por un moderador.');
+    } catch (error: any) {
+      Alert.alert('Error', error?.response?.data?.error || 'No se pudo enviar el reporte.');
+    }
+  };
+
   const isGuest = !user || user.isGuest;
+  const isReviewer = ['ADMIN', 'ELITE'].includes(user?.role ?? '');
+  const hasOwnReview = !isGuest && reviews.some((r) => r.userId === user?.id);
+  const canEdit =
+    !isGuest &&
+    user?.role !== 'VISITOR' &&
+    (
+      ['ADMIN', 'ELITE', 'DISTINGUISHED'].includes(user?.role ?? '') ||
+      (room.owner?.id !== undefined && room.owner.id === user?.id)
+    );
   const amenities = room.amenities || [];
-  const imageUri = room.imageUrl || `https://picsum.photos/seed/${room.id}/800/500`;
+  const photos = (room.photos && room.photos.length > 0)
+    ? room.photos
+    : [{ id: 'placeholder', url: `https://picsum.photos/seed/${room.id}/800/500` }];
+
+  const openLightbox = (index: number) => {
+    setLightboxIndex(index);
+    setLightboxVisible(true);
+    setTimeout(() => {
+      lightboxScrollRef.current?.scrollTo({ x: index * SCREEN_WIDTH, animated: false });
+    }, 50);
+  };
 
   const formatDate = (dateStr: string) => {
     try {
@@ -129,10 +235,37 @@ export default function RoomDetailScreen() {
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView style={styles.container} bounces={false}>
-        {/* Hero Image */}
+      <ScrollView style={styles.container} contentContainerStyle={{flexGrow: 1}} bounces={false} scrollEnabled={true} nestedScrollEnabled={true}>
+        {/* Photo Carousel */}
         <View style={styles.heroContainer}>
-          <Image source={{ uri: imageUri }} style={styles.heroImage} />
+          <ScrollView
+            ref={photoScrollRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            scrollEventThrottle={16}
+            scrollEnabled={true}
+            onScroll={(e) => {
+              const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+              setActivePhotoIndex(idx);
+            }}
+            style={styles.photoCarousel}
+          >
+            {photos.map((photo, idx) => (
+              <TouchableOpacity
+                key={photo.id}
+                activeOpacity={0.92}
+                onPress={() => openLightbox(idx)}
+                style={styles.photoSlide}
+              >
+                <Image
+                  source={{ uri: photo.url }}
+                  style={styles.heroImage}
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
           <LinearGradient
             colors={['rgba(0,0,0,0.55)', 'transparent']}
             style={styles.heroGradient}
@@ -144,7 +277,81 @@ export default function RoomDetailScreen() {
           >
             <ArrowLeft size={24} color={colors.white} />
           </TouchableOpacity>
+          {canEdit && (
+            <TouchableOpacity
+              style={[styles.editButton, { top: insets.top + spacing.sm }]}
+              onPress={() => navigation.navigate('EditRoom', { room })}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Pencil size={20} color={colors.white} />
+            </TouchableOpacity>
+          )}
+          {photos.length > 1 && (
+            <View style={styles.dotsContainer}>
+              {photos.map((_, idx) => (
+                <View key={idx} style={[styles.dot, idx === activePhotoIndex && styles.dotActive]} />
+              ))}
+            </View>
+          )}
         </View>
+
+        {/* Lightbox Modal */}
+        <Modal
+          visible={lightboxVisible}
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={() => setLightboxVisible(false)}
+        >
+          <View style={styles.lightboxContainer}>
+            <StatusBar hidden />
+            <ScrollView
+              ref={lightboxScrollRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              scrollEventThrottle={16}
+              scrollEnabled={true}
+              onScroll={(e) => {
+                const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+                setLightboxIndex(idx);
+              }}
+              style={styles.lightboxScroll}
+            >
+              {photos.map((photo) => (
+                <View key={photo.id} style={styles.lightboxSlide}>
+                  <Image
+                    source={{ uri: photo.url }}
+                    style={styles.lightboxImage}
+                    resizeMode="contain"
+                  />
+                </View>
+              ))}
+            </ScrollView>
+            {/* Counter */}
+            {photos.length > 1 && (
+              <View style={styles.lightboxCounter}>
+                <Text style={styles.lightboxCounterText}>{lightboxIndex + 1} / {photos.length}</Text>
+              </View>
+            )}
+            {/* Dots */}
+            {photos.length > 1 && (
+              <View style={styles.lightboxDots}>
+                {photos.map((_, idx) => (
+                  <View key={idx} style={[styles.dot, idx === lightboxIndex && styles.dotActive]} />
+                ))}
+              </View>
+            )}
+            {/* Close button */}
+            <TouchableOpacity
+              style={[styles.lightboxCloseBtn, { top: (StatusBar.currentHeight ?? 0) + spacing.lg }]}
+              onPress={() => setLightboxVisible(false)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <X size={22} color={colors.white} />
+            </TouchableOpacity>
+          </View>
+        </Modal>
 
         <View style={styles.body}>
           {/* Title + Rating */}
@@ -164,13 +371,37 @@ export default function RoomDetailScreen() {
             </View>
           )}
 
-          {/* Status + Verified */}
+          {/* Type + Verified */}
           <View style={styles.badgeRow}>
-            <StatusBadge status={room.status} />
+            {room.placeType && (
+              <View style={[styles.placeTypeBadge, room.placeType === 'CAMBIADOR' && styles.placeTypeBadgeCambiador]}>
+                <Text style={[styles.placeTypeBadgeText, room.placeType === 'CAMBIADOR' && styles.placeTypeBadgeTextCambiador]}>
+                  {room.placeType === 'CAMBIADOR' ? '🚼 Cambiador' : '🤱 Lactario'}
+                </Text>
+              </View>
+            )}
             {room.isVerified && (
               <View style={styles.verifiedTag}>
                 <BadgeCheck size={14} color={colors.success} />
                 <Text style={styles.verifiedText}>Verificado</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Access + Owner row */}
+          <View style={styles.metaRow}>
+            {room.access && (
+              <View style={styles.metaItem}>
+                <Users size={14} color={colors.slate[500]} />
+                <Text style={styles.metaText}>{room.access}</Text>
+              </View>
+            )}
+            {['ADMIN', 'ELITE'].includes(user?.role ?? '') && room.owner && (
+              <View style={styles.metaItem}>
+                <UserCircle size={14} color={colors.slate[500]} />
+                <Text style={styles.metaText}>
+                  {room.owner.name || room.owner.email}
+                </Text>
               </View>
             )}
           </View>
@@ -205,13 +436,30 @@ export default function RoomDetailScreen() {
             </View>
           )}
 
+          {/* Tags */}
+          {room.tags && room.tags.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.tagsHeader}>
+                <Tag size={14} color={colors.slate[500]} />
+                <Text style={styles.tagsTitle}>Etiquetas</Text>
+              </View>
+              <View style={styles.tagsRow}>
+                {room.tags.map((tag, idx) => (
+                  <View key={idx} style={styles.tagChip}>
+                    <Text style={styles.tagChipText}>{tag}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
           {/* Reviews Section */}
           <View style={styles.section}>
             <View style={styles.reviewsHeader}>
               <Text style={styles.sectionTitle}>
                 Resenas ({reviews.length})
               </Text>
-              {!isGuest && !showReviewForm && (
+              {!isGuest && !showReviewForm && !hasOwnReview && (
                 <TouchableOpacity
                   style={styles.addReviewBtn}
                   onPress={() => setShowReviewForm(true)}
@@ -295,30 +543,101 @@ export default function RoomDetailScreen() {
               </Text>
             )}
 
-            {reviews.map((review) => (
-              <Card key={review.id} style={styles.reviewCard}>
-                <View style={styles.reviewCardContent}>
-                  <View style={styles.reviewCardHeader}>
-                    <AvatarInitials
-                      name={review.userName || 'Usuario'}
-                      size="sm"
-                    />
-                    <View style={styles.reviewMeta}>
-                      <Text style={styles.reviewerName}>
-                        {review.userName || 'Usuario'}
-                      </Text>
-                      <Text style={styles.reviewDate}>
-                        {formatDate(review.date)}
-                      </Text>
+            {reviews.map((review) => {
+              const isOwnReview = user?.id === review.userId;
+              const isEditing = editingReviewId === review.id;
+              return (
+                <Card key={review.id} style={[styles.reviewCard, review.isHidden && styles.reviewCardHidden]}>
+                  <View style={styles.reviewCardContent}>
+                    {/* Hidden banner for admins */}
+                    {review.isHidden && (
+                      <View style={styles.hiddenBanner}>
+                        <EyeOff size={13} color={colors.warning} />
+                        <Text style={styles.hiddenBannerText}>
+                          Oculto — {review.reportCount} reporte{review.reportCount !== 1 ? 's' : ''}
+                        </Text>
+                      </View>
+                    )}
+
+                    <View style={styles.reviewCardHeader}>
+                      <AvatarInitials name={review.userName || 'Usuario'} size="sm" imageUrl={review.userAvatarUrl} />
+                      <View style={styles.reviewMeta}>
+                        <Text style={styles.reviewerName}>{review.userName || 'Usuario'}</Text>
+                        <Text style={styles.reviewDate}>{formatDate(review.date)}</Text>
+                      </View>
+                      {!isEditing && <Rating value={review.rating} size={14} />}
                     </View>
-                    <Rating value={review.rating} size={14} />
+
+                    {/* Inline edit form */}
+                    {isEditing ? (
+                      <View style={styles.editForm}>
+                        <Rating value={editRating} size={22} readonly={false} onChange={setEditRating} />
+                        <TextInput
+                          style={styles.reviewInput}
+                          value={editComment}
+                          onChangeText={setEditComment}
+                          multiline
+                          numberOfLines={3}
+                          textAlignVertical="top"
+                          placeholderTextColor={colors.slate[400]}
+                          placeholder="Edita tu comentario..."
+                        />
+                        <View style={styles.editActions}>
+                          <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditingReviewId(null)}>
+                            <Text style={styles.cancelBtnText}>Cancelar</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.submitBtn, editSubmitting && styles.submitBtnDisabled]}
+                            onPress={handleSaveEditReview}
+                            disabled={editSubmitting}
+                          >
+                            {editSubmitting
+                              ? <ActivityIndicator size="small" color={colors.white} />
+                              : <Text style={styles.submitBtnText}>Guardar</Text>
+                            }
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      review.comment ? <Text style={styles.reviewComment}>{review.comment}</Text> : null
+                    )}
+
+                    {/* Action row */}
+                    {!isEditing && (
+                      <View style={styles.reviewActions}>
+                        {isOwnReview ? (
+                          <>
+                            <TouchableOpacity style={styles.reviewActionBtn} onPress={() => handleEditReview(review)}>
+                              <Pencil size={13} color={colors.slate[400]} />
+                              <Text style={styles.reviewActionText}>Editar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.reviewActionBtn} onPress={() => handleDeleteReview(review.id)}>
+                              <Trash2 size={13} color={colors.error} />
+                              <Text style={[styles.reviewActionText, { color: colors.error }]}>Eliminar</Text>
+                            </TouchableOpacity>
+                          </>
+                        ) : (
+                          <>
+                            {!isGuest && (
+                              <TouchableOpacity style={styles.reviewActionBtn} onPress={() => handleReportReview(review.id)}>
+                                <Flag size={13} color={colors.slate[400]} />
+                                <Text style={styles.reviewActionText}>Reportar</Text>
+                              </TouchableOpacity>
+                            )}
+                            {isReviewer && (
+                              <TouchableOpacity style={styles.reviewActionBtn} onPress={() => handleDeleteReview(review.id)}>
+                                <Trash2 size={13} color={colors.error} />
+                                <Text style={[styles.reviewActionText, { color: colors.error }]}>Eliminar</Text>
+                              </TouchableOpacity>
+                            )}
+                          </>
+                        )}
+                      </View>
+                    )}
                   </View>
-                  {review.comment ? (
-                    <Text style={styles.reviewComment}>{review.comment}</Text>
-                  ) : null}
-                </View>
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </View>
         </View>
       </ScrollView>
@@ -336,12 +655,66 @@ const styles = StyleSheet.create({
   },
   heroContainer: {
     position: 'relative',
-    height: 250,
+    height: 320,
+  },
+  photoCarousel: {
+    height: 320,
+  },
+  photoSlide: {
+    width: SCREEN_WIDTH,
+    height: 320,
   },
   heroImage: {
-    width: '100%',
-    height: 250,
-    backgroundColor: colors.slate[200],
+    width: SCREEN_WIDTH,
+    height: 320,
+  },
+  lightboxContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+  },
+  lightboxScroll: {
+    height: Dimensions.get('window').height,
+  },
+  lightboxSlide: {
+    width: SCREEN_WIDTH,
+    height: Dimensions.get('window').height,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lightboxImage: {
+    width: SCREEN_WIDTH,
+    height: Dimensions.get('window').height,
+  },
+  lightboxCloseBtn: {
+    position: 'absolute',
+    right: spacing.lg,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lightboxCounter: {
+    position: 'absolute',
+    top: spacing.xxl,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  lightboxCounterText: {
+    ...typography.smallBold,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  lightboxDots: {
+    position: 'absolute',
+    bottom: spacing.xxl,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
   },
   heroGradient: {
     position: 'absolute',
@@ -349,6 +722,25 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 120,
+  },
+  dotsContainer: {
+    position: 'absolute',
+    bottom: spacing.sm,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+  },
+  dotActive: {
+    backgroundColor: colors.white,
+    width: 18,
   },
   backButton: {
     position: 'absolute',
@@ -359,6 +751,34 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  editButton: {
+    position: 'absolute',
+    right: spacing.lg,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.full,
+    backgroundColor: '#fff1f2',
+  },
+  placeTypeBadgeCambiador: {
+    backgroundColor: '#ede9fe',
+  },
+  placeTypeBadgeText: {
+    ...typography.captionBold,
+    color: '#e11d48',
+  },
+  placeTypeBadgeTextCambiador: {
+    color: '#7c3aed',
   },
   body: {
     padding: spacing.lg,
@@ -394,6 +814,47 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+    flexWrap: 'wrap',
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  metaText: {
+    ...typography.small,
+    color: colors.slate[500],
+  },
+  tagsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  tagsTitle: {
+    ...typography.smallBold,
+    color: colors.slate[500],
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  tagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  tagChip: {
+    backgroundColor: colors.slate[100],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.full,
+  },
+  tagChipText: {
+    ...typography.caption,
+    color: colors.slate[600],
   },
   verifiedTag: {
     flexDirection: 'row',
@@ -537,6 +998,11 @@ const styles = StyleSheet.create({
   reviewCard: {
     marginBottom: spacing.md,
   },
+  reviewCardHidden: {
+    borderWidth: 1,
+    borderColor: colors.warning,
+    opacity: 0.85,
+  },
   reviewCardContent: {
     padding: spacing.lg,
     gap: spacing.sm,
@@ -562,5 +1028,42 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.slate[600],
     marginTop: spacing.xs,
+  },
+  hiddenBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radii.sm,
+  },
+  hiddenBannerText: {
+    ...typography.caption,
+    color: colors.warning,
+    fontWeight: '600',
+  },
+  reviewActions: {
+    flexDirection: 'row',
+    gap: spacing.lg,
+    marginTop: spacing.xs,
+  },
+  reviewActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  reviewActionText: {
+    ...typography.caption,
+    color: colors.slate[400],
+  },
+  editForm: {
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  editActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.md,
   },
 });

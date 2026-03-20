@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { MapPin } from 'lucide-react-native';
 import { Lactario } from '../types';
+import { ZoomTarget } from './MapComponent.web';
 import { colors } from '../theme';
 import PulsingLocationMarker from './map/PulsingLocationMarker';
 
@@ -14,6 +15,7 @@ try {
 interface MapComponentProps {
   lactarios?: Lactario[];
   onSelectRoom?: (lactario: Lactario) => void;
+  zoomTarget?: ZoomTarget | null;
 }
 
 const DEFAULT_REGION: Region = {
@@ -23,9 +25,20 @@ const DEFAULT_REGION: Region = {
   longitudeDelta: 0.0421,
 };
 
-export default function MapComponent({ lactarios = [], onSelectRoom }: MapComponentProps) {
+export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget }: MapComponentProps) {
+  const mapRef = useRef<MapView | null>(null);
   const [region, setRegion] = useState<Region>(DEFAULT_REGION);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+
+  useEffect(() => {
+    if (!zoomTarget || !mapRef.current) return;
+    mapRef.current.animateToRegion({
+      latitude: zoomTarget.lat,
+      longitude: zoomTarget.lng,
+      latitudeDelta: zoomTarget.zoom ? 0.01 / zoomTarget.zoom * 13 : 0.05,
+      longitudeDelta: zoomTarget.zoom ? 0.01 / zoomTarget.zoom * 13 : 0.05,
+    }, 800);
+  }, [zoomTarget]);
 
   useEffect(() => {
     if (!Location) return;
@@ -39,14 +52,15 @@ export default function MapComponent({ lactarios = [], onSelectRoom }: MapCompon
       setUserLocation(coords);
       setRegion({
         ...coords,
-        latitudeDelta: 0.0922,
-        longitudeDelta: 0.0421,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
       });
     })();
   }, []);
 
   return (
     <MapView
+      ref={mapRef}
       provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
       style={styles.map}
       initialRegion={region}

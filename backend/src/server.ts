@@ -17,6 +17,9 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust proxy — required when running behind Coolify/nginx reverse proxy
+app.set('trust proxy', 1);
+
 // CORS — in production, replace '*' with specific allowed origins
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')

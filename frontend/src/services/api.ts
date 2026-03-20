@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // For Expo Go on a device, replace with your computer's local IP (e.g., http://192.168.1.X:3000/api/v1)
 // 'localhost' works on iOS simulator. Use 10.0.2.2 on Android emulator.
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api/v1';
+const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api/v1';
 
 const api = axios.create({
   baseURL: BASE_URL,

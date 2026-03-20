@@ -2,9 +2,11 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Declare build arg so Docker passes it from Coolify at build time
+# Declare build args so Docker passes them from Coolify at build time
 ARG EXPO_PUBLIC_API_BASE_URL
 ENV EXPO_PUBLIC_API_BASE_URL=$EXPO_PUBLIC_API_BASE_URL
+ARG EXPO_PUBLIC_API_URL
+ENV EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL
 
 # Install dependencies
 COPY package*.json ./

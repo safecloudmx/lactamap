@@ -10,7 +10,7 @@ RUN npm install --legacy-peer-deps
 COPY . .
 
 # Build for web
-RUN npm run web 2>/dev/null || npm run build
+RUN npm run build
 
 # Production - serve with Node
 FROM node:22-alpine

@@ -2,6 +2,10 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
+# Declare build arg so Docker passes it from Coolify at build time
+ARG EXPO_PUBLIC_API_BASE_URL
+ENV EXPO_PUBLIC_API_BASE_URL=$EXPO_PUBLIC_API_BASE_URL
+
 # Install dependencies
 COPY package*.json ./
 RUN npm install --legacy-peer-deps
@@ -9,7 +13,7 @@ RUN npm install --legacy-peer-deps
 # Copy source
 COPY . .
 
-# Build for web
+# Build for web (EXPO_PUBLIC_* gets inlined into the bundle here)
 RUN npm run build
 
 # Production - serve with Node

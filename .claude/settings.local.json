@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(pkill -f \"npm run dev\")",
+      "Bash(pkill -f \"expo start\")",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill /PID 2736 /F)",
+      "Bash(taskkill /PID 11432 /F)",
+      "Bash(wmic process:*)",
+      "Bash(taskkill /IM node.exe /F /T)",
+      "Bash(for pid:*)",
+      "Bash(do taskkill:*)",
+      "Bash(done)",
+      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 3000,8081 | Select-Object -Property OwningProcess | ForEach-Object { Stop-Process -Id $_OwningProcess -Force }\")",
+      "Bash(curl -s http://localhost:3000/api/v1/lactarios)"
+    ]
+  }
+}

@@ -1,0 +1,131 @@
+name: Deploy to SafeCloud
+
+on:
+  push:
+    branches:
+      - qa
+      - main
+
+env:
+  DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+  DEPLOY_SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
+  DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Determine deployment target
+        id: target
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/qa" ]; then
+            echo "BRANCH=qa" >> $GITHUB_OUTPUT
+            echo "DEPLOY_PATH=${{ secrets.QA_DEPLOY_PATH }}" >> $GITHUB_OUTPUT
+            echo "URL=qa-lactamap.mosqueda.dev" >> $GITHUB_OUTPUT
+          else
+            echo "BRANCH=main" >> $GITHUB_OUTPUT
+            echo "DEPLOY_PATH=${{ secrets.PROD_DEPLOY_PATH }}" >> $GITHUB_OUTPUT
+            echo "URL=lactamap.mosqueda.dev" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: |
+          npm install --legacy-peer-deps
+
+      - name: Build backend
+        working-directory: ./backend
+        run: |
+          npm run build 2>/dev/null || echo "No build script in backend"
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: |
+          npm install --legacy-peer-deps
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: |
+          npm run web 2>/dev/null || npm run build
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ env.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ env.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Deploy to ${{ steps.target.outputs.URL }}
+        run: |
+          export RSYNC_RSH="ssh -i ~/.ssh/deploy_key"
+
+          # Create deployment structure
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ env.DEPLOY_SSH_USER }}@${{ env.DEPLOY_HOST }} << 'EOF'
+          mkdir -p ${{ steps.target.outputs.DEPLOY_PATH }}/frontend
+          mkdir -p ${{ steps.target.outputs.DEPLOY_PATH }}/backend
+          mkdir -p ${{ steps.target.outputs.DEPLOY_PATH }}/backend/node_modules
+          EOF
+
+          # Upload backend
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            ./backend/ \
+            ${{ env.DEPLOY_SSH_USER }}@${{ env.DEPLOY_HOST }}:${{ steps.target.outputs.DEPLOY_PATH }}/backend/ \
+            --exclude node_modules \
+            --exclude .env \
+            --exclude .env.local
+
+          # Upload frontend
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            ./frontend/dist/ \
+            ${{ env.DEPLOY_SSH_USER }}@${{ env.DEPLOY_HOST }}:${{ steps.target.outputs.DEPLOY_PATH }}/frontend/ \
+            2>/dev/null || rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            ./frontend/web-build/ \
+            ${{ env.DEPLOY_SSH_USER }}@${{ env.DEPLOY_HOST }}:${{ steps.target.outputs.DEPLOY_PATH }}/frontend/
+
+      - name: Install dependencies and restart backend
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ env.DEPLOY_SSH_USER }}@${{ env.DEPLOY_HOST }} << 'EOF'
+          cd ${{ steps.target.outputs.DEPLOY_PATH }}/backend
+
+          # Copy .env if exists locally (you need to ensure this is set up)
+          # cp /path/to/.env . 2>/dev/null || true
+
+          # Install backend dependencies
+          npm install --legacy-peer-deps
+
+          # Restart with PM2 if available
+          if command -v pm2 &> /dev/null; then
+            pm2 delete lactamap-${{ steps.target.outputs.BRANCH }} 2>/dev/null || true
+            pm2 start npm --name "lactamap-${{ steps.target.outputs.BRANCH }}" -- start
+            pm2 save
+          else
+            echo "PM2 not found. Please install with: npm install -g pm2"
+          fi
+          EOF
+
+      - name: Deployment Status
+        run: |
+          echo "✅ Deployment to ${{ steps.target.outputs.URL }} completed!"
+          echo "📍 Branch: ${{ steps.target.outputs.BRANCH }}"
+          echo "📂 Path: ${{ steps.target.outputs.DEPLOY_PATH }}"
+
+      - name: Notify Slack (Optional)
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Deployment to ${{ steps.target.outputs.URL }} ${{ job.status }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        continue-on-error: true

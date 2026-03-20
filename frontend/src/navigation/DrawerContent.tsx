@@ -10,7 +10,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { AvatarInitials } from '../components/ui';
 import { colors, spacing, typography, radii, shadows } from '../theme';
-import { getSubmissions } from '../services/api';
+import { getSubmissions, getUserProfile } from '../services/api';
 
 interface MenuItem {
   icon: any;
@@ -26,6 +26,7 @@ export default function DrawerContent({ navigation }: DrawerContentComponentProp
   const { user, signOut } = useAuth();
   const insets = useSafeAreaInsets();
   const userName = user?.name || user?.email?.split('@')[0] || 'Usuario';
+  const [profileData, setProfileData] = useState<any>(null);
 
   const handleNavigate = (route?: string, tab?: string) => {
     if (tab) {
@@ -43,6 +44,10 @@ export default function DrawerContent({ navigation }: DrawerContentComponentProp
 
   const isAdminOrElite = user?.role === 'ADMIN' || user?.role === 'ELITE';
   const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    getUserProfile().then(setProfileData).catch(() => {});
+  }, [user?.id]);
 
   useEffect(() => {
     if (!isAdminOrElite) return;
@@ -94,23 +99,23 @@ export default function DrawerContent({ navigation }: DrawerContentComponentProp
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerBg} />
-        <AvatarInitials name={userName} size="xl" />
+        <AvatarInitials name={userName} size="xl" imageUrl={profileData?.avatarUrl || (user as any)?.avatarUrl} />
         <Text style={styles.userName}>{userName}</Text>
         <Text style={styles.userEmail}>{user?.email}</Text>
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{user?.points || 0}</Text>
+            <Text style={styles.statValue}>{profileData?.points ?? user?.points ?? 0}</Text>
             <Text style={styles.statLabel}>Puntos</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{user?.stats?.roomsAdded || 0}</Text>
+            <Text style={styles.statValue}>{profileData?.stats?.roomsAdded ?? 0}</Text>
             <Text style={styles.statLabel}>Aportes</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{user?.stats?.reviewsWritten || 0}</Text>
-            <Text style={styles.statLabel}>Resenas</Text>
+            <Text style={styles.statValue}>{profileData?.stats?.reviewsWritten ?? 0}</Text>
+            <Text style={styles.statLabel}>Reseñas</Text>
           </View>
         </View>
       </View>
@@ -141,7 +146,7 @@ export default function DrawerContent({ navigation }: DrawerContentComponentProp
 
       {/* Footer */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-        <Text style={styles.version}>LactaMap v0.0.3</Text>
+        <Text style={styles.version}>LactaMap v0.08-260320</Text>
       </View>
     </View>
   );
@@ -178,28 +183,31 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.lg,
+    marginTop: spacing.xl,
     backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    borderRadius: radii.lg,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
+    width: '100%',
   },
   statItem: {
     alignItems: 'center',
     flex: 1,
+    gap: spacing.xs,
   },
   statValue: {
-    ...typography.bodyBold,
+    ...typography.h3,
     color: colors.white,
   },
   statLabel: {
-    ...typography.caption,
+    ...typography.small,
     color: colors.primary[200],
+    letterSpacing: 0.3,
   },
   statDivider: {
     width: 1,
-    height: 24,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    height: 32,
+    backgroundColor: 'rgba(255,255,255,0.25)',
   },
   menu: {
     flex: 1,

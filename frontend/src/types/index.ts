@@ -49,7 +49,7 @@ export interface Lactario {
   comments?: number;
   reviews?: Review[];
   status: 'PENDING' | 'ACTIVE' | 'CLOSED';
-  placeType?: 'LACTARIO' | 'CAMBIADOR';
+  placeType?: 'LACTARIO' | 'CAMBIADOR' | 'BANO_FAMILIAR' | 'PUNTO_INTERES';
   owner?: { id: string; name?: string; email: string };
   access?: GenderAccess;
   imageUrl?: string;

@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useEffect } from 'react';
+import React, { useMemo, useRef, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { MapPin } from 'lucide-react-native';
 import { Lactario } from '../types';
@@ -18,6 +18,7 @@ interface MapComponentProps {
 
 export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget }: MapComponentProps) {
   const iframeRef = useRef<any>(null);
+  const [visibleCounts, setVisibleCounts] = useState({ LACTARIO: 0, CAMBIADOR: 0, BANO_FAMILIAR: 0, PUNTO_INTERES: 0 });
 
   // Post zoom command to Leaflet inside the iframe
   useEffect(() => {
@@ -29,26 +30,37 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
   }, [zoomTarget]);
 
   const mapHtml = useMemo(() => {
+    const PIN_COLORS: Record<string, string> = {
+      LACTARIO: '#f43f5e',
+      CAMBIADOR: '#8b5cf6',
+      BANO_FAMILIAR: '#0d9488',
+      PUNTO_INTERES: '#f59e0b',
+    };
+    const PIN_ICONS: Record<string, string> = {
+      LACTARIO: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0016.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 002 8.5c0 2.3 1.5 4.05 3 5.5l7 7 7-7z"/></svg>`,
+      CAMBIADOR: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M20.5 4.5h-17A1.5 1.5 0 002 6v3.5c2.5.8 4.5 1.5 4.5 1.5s-2 .7-4.5 1.5V18a1.5 1.5 0 001.5 1.5h17A1.5 1.5 0 0022 18v-5.5c-2.5-.8-4.5-1.5-4.5-1.5s2-.7 4.5-1.5V6a1.5 1.5 0 00-1.5-1.5z"/></svg>`,
+      BANO_FAMILIAR: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M9 2a2 2 0 100 4 2 2 0 000-4zm6 0a2 2 0 100 4 2 2 0 000-4zM6 8v5h2v9h2v-5h2v5h2V13h2V8H6zm7 0v2h2V8h-2z"/></svg>`,
+      PUNTO_INTERES: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`,
+    };
     const markers = lactarios
       .filter((l) => l.latitude && l.longitude)
       .map((l) => {
-        const isCambiador = l.placeType === 'CAMBIADOR';
-        const pinColor = isCambiador ? '#8b5cf6' : '#f43f5e';
-        const tailColor = isCambiador ? '#8b5cf6' : '#f43f5e';
-        // Lactario: breastfeeding silhouette. Cambiador: diaper shape.
-        const iconSvg = isCambiador
-          ? `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M20.5 4.5h-17A1.5 1.5 0 002 6v3.5c2.5.8 4.5 1.5 4.5 1.5s-2 .7-4.5 1.5V18a1.5 1.5 0 001.5 1.5h17A1.5 1.5 0 0022 18v-5.5c-2.5-.8-4.5-1.5-4.5-1.5s2-.7 4.5-1.5V6a1.5 1.5 0 00-1.5-1.5z"/></svg>`
-          : `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0016.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 002 8.5c0 2.3 1.5 4.05 3 5.5l7 7 7-7z"/></svg>`;
+        const pt = l.placeType || 'LACTARIO';
+        const pinColor = PIN_COLORS[pt] || '#f43f5e';
+        const iconSvg = PIN_ICONS[pt] || PIN_ICONS.LACTARIO;
+        const badgeBg = pt === 'CAMBIADOR' ? '#ede9fe' : pt === 'BANO_FAMILIAR' ? '#ccfbf1' : pt === 'PUNTO_INTERES' ? '#fef3c7' : '#fff1f2';
+        const badgeColor = pt === 'CAMBIADOR' ? '#7c3aed' : pt === 'BANO_FAMILIAR' ? '#0f766e' : pt === 'PUNTO_INTERES' ? '#d97706' : '#e11d48';
+        const badgeLabel = pt === 'CAMBIADOR' ? '🚼 Cambiador' : pt === 'BANO_FAMILIAR' ? '🚻 Baño Familiar' : pt === 'PUNTO_INTERES' ? '⭐ Punto de Interés' : '🤱 Lactario';
         return (
           `(function(){` +
           `var el=document.createElement('div');` +
           `el.className='custom-pin';` +
-          `el.innerHTML='<div class="pin-head" style="background:${pinColor}">${iconSvg}</div><div class="pin-tail" style="border-top-color:${tailColor}"></div>';` +
+          `el.innerHTML='<div class="pin-head" style="background:${pinColor}">${iconSvg}</div><div class="pin-tail" style="border-top-color:${pinColor}"></div>';` +
           `var icon=L.divIcon({className:'',html:el.outerHTML,iconSize:[32,42],iconAnchor:[16,42],popupAnchor:[0,-48]});` +
           `var popupContent='<div style="font-family:sans-serif;min-width:200px;border-radius:10px;overflow:hidden;margin:-1px">'+` +
           (l.imageUrl ? `'<img src="${l.imageUrl}" style="width:100%;height:110px;object-fit:cover;display:block" />'+` : `''`) +
           `'<div style="padding:10px 12px 4px">'+` +
-          `'<span style="font-size:11px;background:${isCambiador ? '#ede9fe' : '#fff1f2'};color:${isCambiador ? '#7c3aed' : '#e11d48'};padding:2px 8px;border-radius:99px;font-weight:700">${isCambiador ? '🚼 Cambiador' : '🤱 Lactario'}</span>'+` +
+          `'<span style="font-size:11px;background:${badgeBg};color:${badgeColor};padding:2px 8px;border-radius:99px;font-weight:700">${badgeLabel}</span>'+` +
           `'<div style="font-weight:700;margin-top:5px;font-size:14px">${l.name.replace(/'/g, "\\'").replace(/"/g, '&quot;')}</div>'+` +
           `'<div style="color:#64748b;font-size:12px;margin-top:2px;margin-bottom:6px">${(l.address || '').replace(/'/g, "\\'").replace(/"/g, '&quot;')}</div>'+` +
           `'</div>'+` +
@@ -83,6 +95,7 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
   }
   .leaflet-popup-content { margin: 0 !important; padding: 0 !important; }
   .leaflet-popup-content-wrapper { padding: 0 !important; border-radius: 12px !important; overflow: hidden; }
+  .leaflet-control-attribution a { pointer-events: none; cursor: default; }
   .user-location-wrap {
     position:relative; width:60px; height:60px;
     display:flex; align-items:center; justify-content:center;
@@ -116,6 +129,20 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
 
   ${markers}
 
+  // Visible markers counter
+  var _allMarkers = [${lactarios.filter(l => l.latitude && l.longitude).map(l => `[${l.latitude},${l.longitude},'${l.placeType || 'LACTARIO'}']`).join(',')}];
+  function _updateCount() {
+    var b = map.getBounds();
+    var counts = { LACTARIO: 0, CAMBIADOR: 0, BANO_FAMILIAR: 0, PUNTO_INTERES: 0 };
+    _allMarkers.forEach(function(m) {
+      if (b.contains([m[0], m[1]])) { counts[m[2]] = (counts[m[2]] || 0) + 1; }
+    });
+    window.parent.postMessage({ type: 'visibleCounts', counts: counts }, '*');
+  }
+  map.on('moveend', _updateCount);
+  map.on('zoomend', _updateCount);
+  setTimeout(_updateCount, 800);
+
   // Listen for commands from the React parent (zoom, etc.)
   window.addEventListener('message', function(e) {
     if (!e.data || !e.data.type) return;
@@ -148,11 +175,23 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
   }, [lactarios]);
 
   useEffect(() => {
+    const counts = { LACTARIO: 0, CAMBIADOR: 0, BANO_FAMILIAR: 0, PUNTO_INTERES: 0 } as Record<string, number>;
+    lactarios.forEach((l) => {
+      const t = l.placeType || 'LACTARIO';
+      counts[t] = (counts[t] || 0) + 1;
+    });
+    setVisibleCounts(counts as any);
+  }, [lactarios]);
+
+  useEffect(() => {
     if (Platform.OS !== 'web') return;
     const handler = (event: MessageEvent) => {
       if (event.data?.type === 'selectLactario' && onSelectRoom) {
         const found = lactarios.find((l) => l.id === event.data.id);
         if (found) onSelectRoom(found);
+      }
+      if (event.data?.type === 'visibleCounts') {
+        setVisibleCounts(event.data.counts);
       }
     };
     window.addEventListener('message', handler);
@@ -176,12 +215,26 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
         </View>
       )}
 
-      {lactarios.length > 0 && (
+      <View style={styles.countBadgeWrapper}>
         <View style={styles.countBadge}>
-          <MapPin size={14} color={colors.white} />
-          <Text style={styles.countText}>{lactarios.length} lactarios</Text>
+          {[
+            { key: 'LACTARIO', emoji: '🤱', color: '#f43f5e' },
+            { key: 'CAMBIADOR', emoji: '🚼', color: '#8b5cf6' },
+            { key: 'BANO_FAMILIAR', emoji: '🚻', color: '#0d9488' },
+            { key: 'PUNTO_INTERES', emoji: '⭐', color: '#f59e0b' },
+          ].map((item, i, arr) => (
+            <React.Fragment key={item.key}>
+              <View style={styles.countItem}>
+                <Text style={styles.countEmoji}>{item.emoji}</Text>
+                <Text style={[styles.countNum, { color: item.color }]}>
+                  {(visibleCounts as any)[item.key] || 0}
+                </Text>
+              </View>
+              {i < arr.length - 1 && <View style={styles.countSeparator} />}
+            </React.Fragment>
+          ))}
         </View>
-      )}
+      </View>
     </View>
   );
 }
@@ -190,12 +243,26 @@ const styles = StyleSheet.create({
   container: { flex: 1, position: 'relative' },
   fallback: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   fallbackText: { ...typography.body, color: colors.slate[400] },
+  countBadgeWrapper: {
+    position: 'absolute', bottom: spacing.lg,
+    left: 0, right: 0,
+    alignItems: 'center',
+    pointerEvents: 'none' as any,
+  },
   countBadge: {
-    position: 'absolute', bottom: spacing.lg, right: spacing.lg,
-    flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
-    backgroundColor: colors.primary[500],
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.95)',
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
     borderRadius: radii.full, ...shadows.md,
+    gap: spacing.sm,
   },
-  countText: { ...typography.captionBold, color: colors.white },
+  countItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+  },
+  countEmoji: { fontSize: 12 },
+  countNum: { fontSize: 13, fontWeight: '700' },
+  countSeparator: {
+    width: 1, height: 14,
+    backgroundColor: colors.slate[200],
+  },
 });

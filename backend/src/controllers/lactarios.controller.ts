@@ -115,7 +115,7 @@ export const mapAmenitiesToDB = (amenities: string[]) => ({
   hasSink: amenities.includes('Lavabo'),
   hasPrivacy: amenities.includes('Sala Privada') || amenities.includes('Privado'),
   hasNursingChair: amenities.includes('Sillón Lactancia') || amenities.includes('Cambiador'),
-  isAccessible: false,
+  isAccessible: amenities.includes('Accesible') || amenities.includes('Accessible'),
   hasAC: amenities.includes('Clima (A/C)') || amenities.includes('Climatizado'),
   hasStrollerAccess: false,
   isInBathroom: amenities.includes('Dentro de un Baño'),
@@ -146,7 +146,7 @@ const create = async (req: Request, res: Response) => {
         address,
         description,
         status: lactarioStatus,
-        placeType: placeType === 'CAMBIADOR' ? 'CAMBIADOR' : 'LACTARIO',
+        placeType: ['CAMBIADOR', 'BANO_FAMILIAR', 'PUNTO_INTERES'].includes(placeType) ? placeType : 'LACTARIO',
         ownerId: userId,
         tags: tagList,
         amenities: {

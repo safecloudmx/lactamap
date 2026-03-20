@@ -26,6 +26,8 @@ const ADMIN_ROLES = ['ADMIN', 'ELITE'];
 
 // Changer-specific specifications (separate from lactario amenities)
 const CHANGER_SPECS = ['Dentro de un Baño', 'Abierto', 'Privado', 'Lavabo', 'Climatizado'];
+const BATHROOM_SPECS = ['Lavabo', 'Cambiador', 'Climatizado', 'Accesible', 'Privado', 'Abierto'];
+const POI_TYPES = ['Parque', 'Restaurante', 'Zona de Juegos', 'Cine', 'Centro Comercial', 'Cafetería', 'Farmacia', 'Museo', 'Biblioteca', 'Área Deportiva'];
 
 async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
   try {
@@ -64,7 +66,7 @@ map.on('click',function(e){marker.setLatLng(e.latlng);notify(e.latlng);});
 <\/script></body></html>`;
 }
 
-type PlaceType = 'LACTARIO' | 'CAMBIADOR';
+type PlaceType = 'LACTARIO' | 'CAMBIADOR' | 'BANO_FAMILIAR' | 'PUNTO_INTERES';
 
 export default function AddRoomScreen() {
   const navigation = useNavigation<any>();
@@ -78,6 +80,8 @@ export default function AddRoomScreen() {
   const [access, setAccess] = useState<GenderAccess>(GenderAccess.NEUTRAL);
   const [selectedAmenities, setSelectedAmenities] = useState<Amenity[]>([]);
   const [selectedSpecs, setSelectedSpecs] = useState<string[]>([]);
+  const [selectedBathroomSpecs, setSelectedBathroomSpecs] = useState<string[]>([]);
+  const [selectedPoiTypes, setSelectedPoiTypes] = useState<string[]>([]);
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [showConsent, setShowConsent] = useState(false);
@@ -178,7 +182,14 @@ export default function AddRoomScreen() {
     setShowConsent(false);
     setIsSaving(true);
     try {
-      const amenities = placeType === 'CAMBIADOR' ? selectedSpecs : selectedAmenities.map(String);
+      const amenities =
+        placeType === 'CAMBIADOR' ? selectedSpecs :
+        placeType === 'BANO_FAMILIAR' ? selectedBathroomSpecs :
+        placeType === 'PUNTO_INTERES' ? [] :
+        selectedAmenities.map(String);
+      const finalTags = placeType === 'PUNTO_INTERES'
+        ? [...tags, ...selectedPoiTypes]
+        : tags;
       const result = await createLactario({
         name: name.trim(),
         latitude: effectiveLocation.latitude,
@@ -186,7 +197,7 @@ export default function AddRoomScreen() {
         address: address.trim() || undefined,
         description: description.trim(),
         amenities,
-        tags,
+        tags: finalTags,
         placeType: placeType!,
       });
       Alert.alert(
@@ -212,6 +223,17 @@ export default function AddRoomScreen() {
   const toggleSpec = (spec: string) => {
     setSelectedSpecs((prev) =>
       prev.includes(spec) ? prev.filter((s) => s !== spec) : [...prev, spec]
+    );
+  };
+
+  const toggleBathroomSpec = (spec: string) => {
+    setSelectedBathroomSpecs((prev) =>
+      prev.includes(spec) ? prev.filter((s) => s !== spec) : [...prev, spec]
+    );
+  };
+  const togglePoiType = (t: string) => {
+    setSelectedPoiTypes((prev) =>
+      prev.includes(t) ? prev.filter((s) => s !== t) : [...prev, t]
     );
   };
 
@@ -322,25 +344,24 @@ export default function AddRoomScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
         {/* Type Selector */}
-        <View style={styles.typeSelectorRow}>
-          <TouchableOpacity
-            style={[styles.typeCard, placeType === 'LACTARIO' && styles.typeCardSelected]}
-            onPress={() => setPlaceType('LACTARIO')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.typeEmoji}>🤱</Text>
-            <Text style={[styles.typeCardTitle, placeType === 'LACTARIO' && styles.typeCardTitleSelected]}>Lactario</Text>
-            <Text style={[styles.typeCardDesc, placeType === 'LACTARIO' && styles.typeCardDescSelected]}>Sala de lactancia</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.typeCard, placeType === 'CAMBIADOR' && styles.typeCardSelected]}
-            onPress={() => setPlaceType('CAMBIADOR')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.typeEmoji}>🚼</Text>
-            <Text style={[styles.typeCardTitle, placeType === 'CAMBIADOR' && styles.typeCardTitleSelected]}>Cambiador</Text>
-            <Text style={[styles.typeCardDesc, placeType === 'CAMBIADOR' && styles.typeCardDescSelected]}>Mesa para pañal</Text>
-          </TouchableOpacity>
+        <View style={styles.typeSelectorGrid}>
+          {[
+            { key: 'LACTARIO' as PlaceType, emoji: '🤱', title: 'Lactario', desc: 'Sala de lactancia' },
+            { key: 'CAMBIADOR' as PlaceType, emoji: '🚼', title: 'Cambiador', desc: 'Mesa para pañal' },
+            { key: 'BANO_FAMILIAR' as PlaceType, emoji: '🚻', title: 'Baño Familiar', desc: 'Baño accesible' },
+            { key: 'PUNTO_INTERES' as PlaceType, emoji: '⭐', title: 'Punto de Interés', desc: 'Parque, restaurante…' },
+          ].map((item) => (
+            <TouchableOpacity
+              key={item.key}
+              style={[styles.typeCard, placeType === item.key && styles.typeCardSelected]}
+              onPress={() => setPlaceType(item.key)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.typeEmoji}>{item.emoji}</Text>
+              <Text style={[styles.typeCardTitle, placeType === item.key && styles.typeCardTitleSelected]}>{item.title}</Text>
+              <Text style={[styles.typeCardDesc, placeType === item.key && styles.typeCardDescSelected]}>{item.desc}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         {placeType !== null && (
@@ -482,6 +503,37 @@ export default function AddRoomScreen() {
                 </View>
               </View>
             )}
+
+            {/* Baño Familiar: specifications */}
+            {placeType === 'BANO_FAMILIAR' && (
+              <View style={styles.section}>
+                <Text style={styles.label}>Comodidades</Text>
+                <View style={styles.chipsRow}>
+                  {BATHROOM_SPECS.map((spec) => (
+                    <Chip key={spec} label={spec}
+                      selected={selectedBathroomSpecs.includes(spec)} onPress={() => toggleBathroomSpec(spec)}
+                      icon={selectedBathroomSpecs.includes(spec) ? <Check size={12} color={colors.white} /> : undefined}
+                      size="sm" />
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Punto de Interés: type selection */}
+            {placeType === 'PUNTO_INTERES' && (
+              <View style={styles.section}>
+                <Text style={styles.label}>Tipo de lugar</Text>
+                <Text style={styles.tagHint}>Selecciona uno o varios tipos que apliquen</Text>
+                <View style={styles.chipsRow}>
+                  {POI_TYPES.map((t) => (
+                    <Chip key={t} label={t}
+                      selected={selectedPoiTypes.includes(t)} onPress={() => togglePoiType(t)}
+                      icon={selectedPoiTypes.includes(t) ? <Check size={12} color={colors.white} /> : undefined}
+                      size="sm" />
+                  ))}
+                </View>
+              </View>
+            )}
           </>
         )}
       </ScrollView>
@@ -503,9 +555,9 @@ const styles = StyleSheet.create({
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
 
   // Type selector
-  typeSelectorRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xxl },
+  typeSelectorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginBottom: spacing.xxl },
   typeCard: {
-    flex: 1, alignItems: 'center', padding: spacing.lg,
+    flexBasis: '47%', alignItems: 'center', padding: spacing.lg,
     borderRadius: radii.lg, borderWidth: 2, borderColor: colors.slate[200],
     backgroundColor: colors.slate[50],
   },

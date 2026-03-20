@@ -15,12 +15,36 @@ import { getLactarios } from '../services/api';
 import { Lactario } from '../types';
 import { colors, spacing, typography, radii, shadows } from '../theme';
 
+let Location: any = null;
+try { Location = require('expo-location'); } catch (_) {}
+
+// Haversine distance calculator (km)
+const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
+const PLACE_TYPE_INFO: Record<string, { emoji: string; color: string; label: string }> = {
+  LACTARIO: { emoji: '🤱', color: '#f43f5e', label: 'Lactario' },
+  CAMBIADOR: { emoji: '🚼', color: '#8b5cf6', label: 'Cambiador' },
+  BANO_FAMILIAR: { emoji: '🚻', color: '#0d9488', label: 'Baño Familiar' },
+  PUNTO_INTERES: { emoji: '⭐', color: '#f59e0b', label: 'Punto de Interés' },
+};
+
+interface PlaceWithDistance extends Lactario {
+  distance: number;
+}
+
 export default function DashboardScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const [nearbyCount, setNearbyCount] = useState(0);
-  const [recentLactarios, setRecentLactarios] = useState<Lactario[]>([]);
+  const [nearbyPlaces, setNearbyPlaces] = useState<PlaceWithDistance[]>([]);
 
   const fullName = user?.name || user?.email?.split('@')[0] || 'Visitante';
   const firstName = fullName.split(' ')[0];
@@ -29,9 +53,39 @@ export default function DashboardScreen() {
     useCallback(() => {
       (async () => {
         try {
+          // Get user location
+          let userLat = 25.6866, userLng = -100.3161; // Default Monterrey
+          if (Location) {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status === 'granted') {
+              const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+              userLat = loc.coords.latitude;
+              userLng = loc.coords.longitude;
+            }
+          }
+
+          // Get all places and filter by distance (5km, expand to 10km if needed)
           const data = await getLactarios();
-          setNearbyCount(data.length);
-          setRecentLactarios(data.slice(0, 3));
+          const withDistance = data.map((place: Lactario) => ({
+            ...place,
+            distance: getDistance(userLat, userLng, place.latitude || 0, place.longitude || 0),
+          }));
+
+          // Try 5km first, expand to 10km if no results
+          let nearby = withDistance
+            .filter((place: PlaceWithDistance) => place.distance <= 5)
+            .sort((a: PlaceWithDistance, b: PlaceWithDistance) => a.distance - b.distance)
+            .slice(0, 3);
+
+          if (nearby.length === 0) {
+            nearby = withDistance
+              .filter((place: PlaceWithDistance) => place.distance <= 10)
+              .sort((a: PlaceWithDistance, b: PlaceWithDistance) => a.distance - b.distance)
+              .slice(0, 3);
+          }
+
+          setNearbyCount(nearby.length);
+          setNearbyPlaces(nearby);
         } catch (_) {}
       })();
     }, [])
@@ -143,40 +197,44 @@ export default function DashboardScreen() {
           ))}
         </View>
 
-        {/* Nearby Lactarios Preview */}
-        {recentLactarios.length > 0 && (
+        {/* Nearby Places Preview */}
+        {nearbyPlaces.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Lactarios recientes</Text>
+              <Text style={styles.sectionTitle}>Puntos Cercanos</Text>
               <TouchableOpacity
-                onPress={() => navigation.navigate('HomeTabs', { screen: 'Explorar' })}
+                onPress={() => navigation.navigate('HomeTabs', { screen: 'Mapa' })}
               >
-                <Text style={styles.seeAll}>Ver todos</Text>
+                <Text style={styles.seeAll}>Ver en mapa</Text>
               </TouchableOpacity>
             </View>
-            {recentLactarios.map((l) => (
-              <TouchableOpacity
-                key={l.id}
-                style={styles.lactarioRow}
-                onPress={() => navigation.navigate('RoomDetail', { room: l })}
-                activeOpacity={0.7}
-              >
-                <View style={styles.lactarioPin}>
-                  <MapPin size={16} color={colors.primary[500]} />
-                </View>
-                <View style={styles.lactarioInfo}>
-                  <Text style={styles.lactarioName} numberOfLines={1}>{l.name}</Text>
-                  <Text style={styles.lactarioAddress} numberOfLines={1}>
-                    {l.address || 'Sin direccion'}
-                  </Text>
-                </View>
-                <View style={styles.lactarioRating}>
-                  <Star size={12} color={colors.starFilled} fill={colors.starFilled} />
-                  <Text style={styles.ratingText}>{(l.rating || 0).toFixed(1)}</Text>
-                </View>
-                <ChevronRight size={16} color={colors.slate[400]} />
-              </TouchableOpacity>
-            ))}
+            {nearbyPlaces.map((place: PlaceWithDistance) => {
+              const placeType = place.placeType || 'LACTARIO';
+              const typeInfo = PLACE_TYPE_INFO[placeType];
+              return (
+                <TouchableOpacity
+                  key={place.id}
+                  style={styles.lactarioRow}
+                  onPress={() => navigation.navigate('RoomDetail', { room: place })}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.lactarioPin, { backgroundColor: typeInfo.color + '20' }]}>
+                    <Text style={styles.placeEmoji}>{typeInfo.emoji}</Text>
+                  </View>
+                  <View style={styles.lactarioInfo}>
+                    <Text style={styles.lactarioName} numberOfLines={1}>{place.name}</Text>
+                    <Text style={styles.lactarioAddress} numberOfLines={1}>
+                      {place.distance.toFixed(1)} km • {place.address || 'Sin dirección'}
+                    </Text>
+                  </View>
+                  <View style={styles.lactarioRating}>
+                    <Star size={12} color={colors.starFilled} fill={colors.starFilled} />
+                    <Text style={styles.ratingText}>{(place.rating || 0).toFixed(1)}</Text>
+                  </View>
+                  <ChevronRight size={16} color={colors.slate[400]} />
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
 
@@ -311,6 +369,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary[50],
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  placeEmoji: {
+    fontSize: 18,
   },
   lactarioInfo: {
     flex: 1,

@@ -235,7 +235,7 @@ export default function RoomDetailScreen() {
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView style={styles.container} contentContainerStyle={{flexGrow: 1}} bounces={false} scrollEnabled={true} nestedScrollEnabled={true}>
+      <ScrollView style={styles.container} contentContainerStyle={{flexGrow: 1}} bounces={false} scrollEnabled={true} nestedScrollEnabled={true} showsVerticalScrollIndicator={false}>
         {/* Photo Carousel */}
         <View style={styles.heroContainer}>
           <ScrollView

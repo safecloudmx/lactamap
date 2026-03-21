@@ -6,11 +6,19 @@ import authRoutes from './routes/auth.routes';
 import lactariosRoutes from './routes/lactarios.routes';
 import reviewsRoutes from './routes/reviews.routes';
 import usersRoutes from './routes/users.routes';
+import babiesRoutes from './routes/babies.routes';
+import nursingSessionsRoutes from './routes/nursingSessions.routes';
+import submissionsRoutes from './routes/submissions.routes';
+import editProposalsRoutes from './routes/editProposals.routes';
+import photosRoutes from './routes/photos.routes';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Trust proxy — required when running behind Coolify/nginx reverse proxy
+app.set('trust proxy', 1);
 
 // CORS — in production, replace '*' with specific allowed origins
 const allowedOrigins = process.env.ALLOWED_ORIGINS
@@ -47,6 +55,11 @@ app.use('/api/v1/auth', authLimiter, authRoutes);
 app.use('/api/v1/lactarios', lactariosRoutes);
 app.use('/api/v1/reviews', reviewsRoutes);
 app.use('/api/v1/users', usersRoutes);
+app.use('/api/v1/babies', babiesRoutes);
+app.use('/api/v1/nursing-sessions', nursingSessionsRoutes);
+app.use('/api/v1/submissions', submissionsRoutes);
+app.use('/api/v1/edit-proposals', editProposalsRoutes);
+app.use('/api/v1', photosRoutes);
 
 // Health check
 app.get('/', (_req, res) => {

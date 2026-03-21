@@ -3,13 +3,12 @@
 
 generator client {
   provider = "prisma-client-js"
-  previewFeatures = ["postgresqlExtensions"]
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  extensions = [postgis]
 }
 
 enum Role {
@@ -19,6 +18,12 @@ enum Role {
   ELITE
   OWNER
   ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
 }
 
 enum VerificationType {
@@ -46,24 +51,48 @@ enum ModerationEntityType {
   REVIEW
 }
 
+enum RejectionReason {
+  OBSCENE_CONTENT
+  INCORRECT_CONTENT
+  INTERNAL_TEST
+  DUPLICATE
+  LOW_QUALITY_PHOTO
+  INCORRECT_LOCATION
+  OTHER
+}
+
 model User {
   id            String   @id @default(uuid())
   email         String   @unique
   name          String?
   passwordHash  String
-  role          Role     @default(VISITOR)
-  points        Int      @default(0)
-  syncEnabled   Boolean  @default(false)
-  lastLogin     DateTime @default(now())
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  role                Role          @default(VISITOR)
+  status              AccountStatus @default(ACTIVE)
+  points              Int           @default(0)
+  syncEnabled         Boolean       @default(false)
+  failedLoginAttempts Int           @default(0)
+  lockedUntil         DateTime?
+  passwordResetToken  String?       @unique
+  passwordResetExpiry DateTime?
+  lastLogin           DateTime      @default(now())
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  incorrectContentCount Int           @default(0)
+  avatarUrl             String?
 
   // Relations
-  ownedLactarios     Lactario[] @relation("OwnerLactarios")
-  reviews            Review[]
-  nursingLogs        NursingLog[]
-  maintenanceReports MaintenanceReport[]
-  badges             UserBadge[]
+  ownedLactarios        Lactario[]             @relation("OwnerLactarios")
+  reviews               Review[]
+  babies                Baby[]
+  nursingSessions       NursingSession[]
+  maintenanceReports    MaintenanceReport[]
+  badges                UserBadge[]
+  submissions           LactarioSubmission[]   @relation("SubmittedBy")
+  reviewedSubmissions   LactarioSubmission[]   @relation("ReviewedBy")
+  editProposals         LactarioEditProposal[] @relation("ProposedEdits")
+  reviewedEditProposals LactarioEditProposal[] @relation("ReviewedEdits")
+  reviewReports         ReviewReport[]
 }
 
 model Badge {
@@ -91,13 +120,8 @@ model UserBadge {
 model Lactario {
   id              String   @id @default(uuid())
   name            String
-  // PostGIS Point support is usually handled via raw SQL or unsupported types in Prisma basic usage.
-  // For this schema, we will store lat/lng as decimals for simplicity if PostGIS extension is complex to mock, 
-  // but better to use unsupported type for real PostGIS.
-  // Using unsupported to strictly follow requirements.
-  geom            Unsupported("geometry(Point, 4326)")? 
-  latitude        Decimal? // Fallback/Cache for easy access
-  longitude       Decimal? // Fallback/Cache for easy access
+  latitude        Decimal?
+  longitude       Decimal?
   
   address         String?
   description     String?
@@ -108,15 +132,21 @@ model Lactario {
   verificationCount Int            @default(0)
   status          LactarioStatus   @default(PENDING)
   avgRating       Decimal          @default(0.0)
-  
+  tags            String[]         @default([])
+  placeType       String           @default("LACTARIO")
+  genderAccess    String           @default("Unisex/Familiar")
+  imageUrl        String?
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   // Relations
-  amenities       LactarioAmenity?
-  reviews         Review[]
-  photos          Photo[]
+  amenities          LactarioAmenity?
+  reviews            Review[]
+  photos             Photo[]
   maintenanceReports MaintenanceReport[]
+  submission         LactarioSubmission?
+  editProposals      LactarioEditProposal[]
 }
 
 model LactarioAmenity {
@@ -132,6 +162,8 @@ model LactarioAmenity {
   isAccessible     Boolean  @default(false)
   hasAC            Boolean  @default(false)
   hasStrollerAccess Boolean @default(false)
+  isInBathroom     Boolean  @default(false)
+  isOpen           Boolean  @default(false)
 }
 
 model Review {
@@ -140,10 +172,28 @@ model Review {
   user        User     @relation(fields: [userId], references: [id])
   lactarioId  String
   lactario    Lactario @relation(fields: [lactarioId], references: [id])
-  
+
   rating      Int
   comment     String?
+  reportCount Int      @default(0)
+  isHidden    Boolean  @default(false)
   createdAt   DateTime @default(now())
+
+  reports     ReviewReport[]
+
+  @@unique([userId, lactarioId])
+}
+
+model ReviewReport {
+  id        String   @id @default(uuid())
+  reviewId  String
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@unique([reviewId, userId])
 }
 
 model Photo {
@@ -155,18 +205,36 @@ model Photo {
   createdAt        DateTime @default(now())
 }
 
-model NursingLog {
-  id           String   @id @default(uuid())
-  userId       String
-  user         User     @relation(fields: [userId], references: [id])
-  
-  startTime    DateTime
-  endTime      DateTime
-  side         String // LEFT, RIGHT, BOTH
-  volumeMl     Decimal
-  sessionTotal Decimal
-  
-  createdAt    DateTime @default(now())
+model Baby {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  name      String
+  birthDate DateTime?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  nursingSessions NursingSession[]
+}
+
+model NursingSession {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  babyId         String?
+  baby           Baby?    @relation(fields: [babyId], references: [id])
+
+  startedAt      DateTime
+  endedAt        DateTime
+  leftDuration   Int      // seconds
+  rightDuration  Int      // seconds
+  totalDuration  Int      // seconds
+  totalPauseTime Int      @default(0)
+  lastSide       String   // left, right, both
+  notes          String?
+
+  createdAt      DateTime @default(now())
 }
 
 model MaintenanceReport {
@@ -181,6 +249,47 @@ model MaintenanceReport {
   status       String   @default("OPEN") // OPEN, RESOLVED
   
   createdAt    DateTime @default(now())
+}
+
+model LactarioSubmission {
+  id              String            @id @default(uuid())
+  lactarioId      String            @unique
+  lactario        Lactario          @relation(fields: [lactarioId], references: [id], onDelete: Cascade)
+
+  submittedById   String
+  submittedBy     User              @relation("SubmittedBy", fields: [submittedById], references: [id])
+
+  status          ModerationStatus  @default(PENDING)
+  rejectionReason RejectionReason?
+  rejectionNotes  String?
+
+  reviewedById    String?
+  reviewedBy      User?             @relation("ReviewedBy", fields: [reviewedById], references: [id])
+  reviewedAt      DateTime?
+
+  createdAt       DateTime          @default(now())
+}
+
+model LactarioEditProposal {
+  id            String           @id @default(uuid())
+  lactarioId    String
+  lactario      Lactario         @relation(fields: [lactarioId], references: [id], onDelete: Cascade)
+  proposedById  String
+  proposedBy    User             @relation("ProposedEdits", fields: [proposedById], references: [id])
+
+  name          String?
+  address       String?
+  description   String?
+  amenities     String[]         @default([])
+  tags          String[]         @default([])
+
+  status        ModerationStatus @default(PENDING)
+  reviewedById  String?
+  reviewedBy    User?            @relation("ReviewedEdits", fields: [reviewedById], references: [id])
+  reviewedAt    DateTime?
+  rejectionNotes String?
+
+  createdAt     DateTime         @default(now())
 }
 
 model ModerationQueue {

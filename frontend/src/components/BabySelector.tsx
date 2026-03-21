@@ -7,6 +7,8 @@ import { Plus } from 'lucide-react-native';
 import { colors, spacing, typography, radii } from '../theme';
 import { Baby } from '../types';
 import * as nursingStorage from '../services/nursingStorage';
+import { useAuth } from '../context/AuthContext';
+import LoginPromptModal from './LoginPromptModal';
 
 interface BabySelectorProps {
   selectedBabyId: string | null;
@@ -16,7 +18,9 @@ interface BabySelectorProps {
 
 export default function BabySelector({ selectedBabyId, onSelectBaby, onBabyDeleted }: BabySelectorProps) {
   const [babies, setBabies] = useState<Baby[]>([]);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const navigation = useNavigation<any>();
+  const { user } = useAuth();
 
   // Reload babies every time the screen regains focus (e.g. after adding in Profile)
   useFocusEffect(
@@ -35,6 +39,10 @@ export default function BabySelector({ selectedBabyId, onSelectBaby, onBabyDelet
   };
 
   const handleAddBabyPress = () => {
+    if (user?.isGuest) {
+      setShowLoginModal(true);
+      return;
+    }
     // Navigate to Profile screen where babies are managed
     navigation.navigate('Main', { screen: 'HomeTabs', params: { screen: 'Perfil' } });
   };
@@ -70,6 +78,13 @@ export default function BabySelector({ selectedBabyId, onSelectBaby, onBabyDelet
           <Plus size={16} color={colors.primary[500]} />
         </TouchableOpacity>
       </ScrollView>
+
+      <LoginPromptModal
+        visible={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        title="Inicia sesión para registrar a tu bebé"
+        message="Crea una cuenta para guardar el perfil de tu bebé y registrar tus sesiones de lactancia."
+      />
     </View>
   );
 }

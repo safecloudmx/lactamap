@@ -1,15 +1,16 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DrawerContentComponentProps } from '@react-navigation/drawer';
 import {
   Home, Map, Compass, User, FolderHeart, Trophy,
   Settings, Info, LogOut, ChevronRight, MapPin,
-  ToolCaseIcon,
+  ToolCaseIcon, ShieldCheck,
 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { AvatarInitials } from '../components/ui';
 import { colors, spacing, typography, radii, shadows } from '../theme';
+import { getSubmissions, getUserProfile } from '../services/api';
 
 interface MenuItem {
   icon: any;
@@ -17,6 +18,7 @@ interface MenuItem {
   route?: string;
   tab?: string;
   danger?: boolean;
+  badge?: number;
   onPress?: () => void;
 }
 
@@ -24,6 +26,7 @@ export default function DrawerContent({ navigation }: DrawerContentComponentProp
   const { user, signOut } = useAuth();
   const insets = useSafeAreaInsets();
   const userName = user?.name || user?.email?.split('@')[0] || 'Usuario';
+  const [profileData, setProfileData] = useState<any>(null);
 
   const handleNavigate = (route?: string, tab?: string) => {
     if (tab) {
@@ -39,6 +42,20 @@ export default function DrawerContent({ navigation }: DrawerContentComponentProp
     await signOut();
   };
 
+  const isAdminOrElite = user?.role === 'ADMIN' || user?.role === 'ELITE';
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    getUserProfile().then(setProfileData).catch(() => {});
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!isAdminOrElite) return;
+    getSubmissions('PENDING')
+      .then((data) => setPendingCount(data.length))
+      .catch(() => {});
+  }, [isAdminOrElite]);
+
   const mainItems: MenuItem[] = [
     { icon: Home, label: 'Inicio', tab: 'Inicio' },
     { icon: MapPin, label: 'Mapa', tab: 'Mapa' },
@@ -46,6 +63,7 @@ export default function DrawerContent({ navigation }: DrawerContentComponentProp
     { icon: User, label: 'Mi Perfil', tab: 'Perfil' },
     { icon: FolderHeart, label: 'Mis Aportes', route: 'MyContributions' },
     { icon: ToolCaseIcon, label: 'Recursos', route: 'Resources' },
+    ...(isAdminOrElite ? [{ icon: ShieldCheck, label: 'Revisión de Aportes', route: 'AdminReview', badge: pendingCount }] : []),
   ];
 
   const secondaryItems: MenuItem[] = [
@@ -67,6 +85,11 @@ export default function DrawerContent({ navigation }: DrawerContentComponentProp
       <Text style={[styles.menuLabel, item.danger && styles.menuLabelDanger]}>
         {item.label}
       </Text>
+      {!!item.badge && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{item.badge > 99 ? '99+' : item.badge}</Text>
+        </View>
+      )}
       <ChevronRight size={16} color={colors.slate[300]} />
     </TouchableOpacity>
   );
@@ -76,23 +99,23 @@ export default function DrawerContent({ navigation }: DrawerContentComponentProp
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerBg} />
-        <AvatarInitials name={userName} size="xl" />
+        <AvatarInitials name={userName} size="xl" imageUrl={profileData?.avatarUrl || (user as any)?.avatarUrl} />
         <Text style={styles.userName}>{userName}</Text>
         <Text style={styles.userEmail}>{user?.email}</Text>
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{user?.points || 0}</Text>
+            <Text style={styles.statValue}>{profileData?.points ?? user?.points ?? 0}</Text>
             <Text style={styles.statLabel}>Puntos</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{user?.stats?.roomsAdded || 0}</Text>
+            <Text style={styles.statValue}>{profileData?.stats?.roomsAdded ?? 0}</Text>
             <Text style={styles.statLabel}>Aportes</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{user?.stats?.reviewsWritten || 0}</Text>
-            <Text style={styles.statLabel}>Resenas</Text>
+            <Text style={styles.statValue}>{profileData?.stats?.reviewsWritten ?? 0}</Text>
+            <Text style={styles.statLabel}>Reseñas</Text>
           </View>
         </View>
       </View>
@@ -123,7 +146,7 @@ export default function DrawerContent({ navigation }: DrawerContentComponentProp
 
       {/* Footer */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-        <Text style={styles.version}>LactaMap v0.0.3</Text>
+        <Text style={styles.version}>LactaMap v0.08-260320</Text>
       </View>
     </View>
   );
@@ -160,28 +183,31 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.lg,
+    marginTop: spacing.xl,
     backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    borderRadius: radii.lg,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
+    width: '100%',
   },
   statItem: {
     alignItems: 'center',
     flex: 1,
+    gap: spacing.xs,
   },
   statValue: {
-    ...typography.bodyBold,
+    ...typography.h3,
     color: colors.white,
   },
   statLabel: {
-    ...typography.caption,
+    ...typography.small,
     color: colors.primary[200],
+    letterSpacing: 0.3,
   },
   statDivider: {
     width: 1,
-    height: 24,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    height: 32,
+    backgroundColor: 'rgba(255,255,255,0.25)',
   },
   menu: {
     flex: 1,
@@ -220,5 +246,19 @@ const styles = StyleSheet.create({
   version: {
     ...typography.caption,
     color: colors.slate[400],
+  },
+  badge: {
+    backgroundColor: colors.error,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+  },
+  badgeText: {
+    ...typography.caption,
+    color: colors.white,
+    fontWeight: '700',
   },
 });

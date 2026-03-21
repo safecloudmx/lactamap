@@ -23,6 +23,8 @@ import NursingTimerScreen from '../screens/NursingTimerScreen';
 import ResourcesScreen from '../screens/ResourcesScreen';
 import FeedingHistoryScreen from '../screens/FeedingHistoryScreen';
 import FeedingSessionDetailScreen from '../screens/FeedingSessionDetailScreen';
+import AdminReviewScreen from '../screens/AdminReviewScreen';
+import EditRoomScreen from '../screens/EditRoomScreen';
 
 import CustomTabBar from '../components/CustomTabBar';
 import DrawerContent from './DrawerContent';
@@ -86,7 +88,7 @@ export const AppNavigator = () => {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator screenOptions={{ headerShown: false, cardStyle: { flex: 1 } }}>
         {!user ? (
           <Stack.Screen name="Login" component={LoginScreen} />
         ) : (
@@ -126,6 +128,16 @@ export const AppNavigator = () => {
               name="FeedingSessionDetail"
               component={FeedingSessionDetailScreen}
               options={{ presentation: 'card' }}
+            />
+            <Stack.Screen
+              name="AdminReview"
+              component={AdminReviewScreen}
+              options={{ presentation: 'card' }}
+            />
+            <Stack.Screen
+              name="EditRoom"
+              component={EditRoomScreen}
+              options={{ presentation: 'modal' }}
             />
           </>
         )}

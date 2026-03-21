@@ -18,6 +18,7 @@ import { colors, spacing, typography, radii, shadows } from '../theme';
 import { AvatarInitials } from '../components/ui';
 import { Baby } from '../types';
 import * as nursingStorage from '../services/nursingStorage';
+import LoginPromptModal from '../components/LoginPromptModal';
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
@@ -30,6 +31,7 @@ export default function ProfileScreen() {
   const [showBabyInput, setShowBabyInput] = useState(false);
   const [babyName, setBabyName] = useState('');
   const [editingBaby, setEditingBaby] = useState<Baby | null>(null);
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -60,7 +62,7 @@ export default function ProfileScreen() {
   const stats = [
     { icon: TrendingUp, label: 'Puntos', value: displayUser?.points || 0, color: colors.primary[500] },
     { icon: MapPin, label: 'Aportes', value: displayUser?.stats?.roomsAdded || 0, color: colors.success },
-    { icon: MessageSquare, label: 'Resenas', value: displayUser?.stats?.reviewsWritten || 0, color: colors.info },
+    { icon: MessageSquare, label: 'Reseñas', value: displayUser?.stats?.reviewsWritten || 0, color: colors.info },
   ];
 
   const quickActions = [
@@ -75,14 +77,15 @@ export default function ProfileScreen() {
       infoAlert('Error', 'El nombre debe tener al menos 2 caracteres');
       return;
     }
-    const baby: Baby = {
+    const localBaby: Baby = {
       id: Date.now().toString(),
       name,
       createdAt: new Date().toISOString(),
     };
-    await nursingStorage.saveBaby(baby);
-    await nursingStorage.setActiveBabyId(baby.id);
-    setBabies((prev) => [...prev, baby]);
+    // saveBaby returns the persisted baby (server ID when authenticated, local when guest)
+    const savedBaby = await nursingStorage.saveBaby(localBaby);
+    await nursingStorage.setActiveBabyId(savedBaby.id);
+    setBabies((prev) => [...prev, savedBaby]);
     setBabyName('');
     setShowBabyInput(false);
   };
@@ -165,7 +168,7 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.profileSection}>
-          <AvatarInitials name={userName} size="xl" color={colors.white} />
+          <AvatarInitials name={userName} size="xl" color={colors.white} imageUrl={displayUser?.avatarUrl} />
           <Text style={styles.userName}>{userName}</Text>
           <Text style={styles.userEmail}>{displayUser?.email}</Text>
           <View style={styles.levelBadge}>
@@ -195,7 +198,15 @@ export default function ProfileScreen() {
           </View>
           <TouchableOpacity
             style={styles.addBabyBtn}
-            onPress={() => { setShowBabyInput(true); setEditingBaby(null); setBabyName(''); }}
+            onPress={() => {
+              if (user?.isGuest) {
+                setShowLoginModal(true);
+              } else {
+                setShowBabyInput(true);
+                setEditingBaby(null);
+                setBabyName('');
+              }
+            }}
             activeOpacity={0.7}
           >
             <Plus size={16} color={colors.white} />
@@ -318,6 +329,13 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         ))}
       </View>
+
+      <LoginPromptModal
+        visible={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        title="Inicia sesión para registrar a tu bebé"
+        message="Crea una cuenta para guardar el perfil de tu bebé y sincronizar tus sesiones de lactancia de forma segura."
+      />
     </ScrollView>
   );
 }

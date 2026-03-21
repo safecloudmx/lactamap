@@ -1,0 +1,28 @@
+{
+  "name": "lactamap-root",
+  "version": "1.0.0",
+  "description": "LactaMap Project Root",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "backend": "cd backend && npm run dev",
+    "frontend": "cd frontend && npx expo start --web",
+    "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/safecloudmx/lactamap.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/safecloudmx/lactamap/issues"
+  },
+  "homepage": "https://github.com/safecloudmx/lactamap#readme",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

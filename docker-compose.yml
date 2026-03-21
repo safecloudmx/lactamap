@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lactamap-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - S3_BUCKET=${S3_BUCKET}
+      - PORT=3000
+    depends_on:
+      - postgres
+    networks:
+      - lactamap-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: lactamap-frontend
+    ports:
+      - "3001:3000"
+    environment:
+      - EXPO_PUBLIC_API_BASE_URL=${EXPO_PUBLIC_API_BASE_URL:-http://localhost:3000/api/v1}
+    depends_on:
+      - backend
+    networks:
+      - lactamap-network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: lactamap-postgres
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-db_lactamap}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - lactamap-network
+    restart: unless-stopped
+    # Only use this if you need a local database
+    # Remove this service if you're using cloud PostgreSQL
+
+volumes:
+  postgres_data:
+
+networks:
+  lactamap-network:
+    driver: bridge

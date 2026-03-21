@@ -22,9 +22,17 @@ export interface Review {
   id: string;
   userId: string;
   userName: string;
+  userAvatarUrl?: string | null;
   rating: number;
   comment: string;
   date: string;
+  reportCount?: number;
+  isHidden?: boolean;
+}
+
+export interface ReportedReview extends Review {
+  lactario: { id: string; name: string };
+  reports: { id: string; reason?: string; user: { id: string; name?: string; email: string } }[];
 }
 
 export interface Lactario {
@@ -37,13 +45,18 @@ export interface Lactario {
   resources?: string[]; // Kept for backward compatibility, mapped to Amenities
   amenities?: Amenity[];
   rating?: number;
+  reviewCount?: number;
   comments?: number;
   reviews?: Review[];
   status: 'PENDING' | 'ACTIVE' | 'CLOSED';
+  placeType?: 'LACTARIO' | 'CAMBIADOR' | 'BANO_FAMILIAR' | 'PUNTO_INTERES';
+  owner?: { id: string; name?: string; email: string };
   access?: GenderAccess;
   imageUrl?: string;
+  photos?: { id: string; url: string }[];
   isVerified?: boolean;
   createdBy?: string;
+  tags?: string[];
 }
 
 export interface Badge {
@@ -62,12 +75,30 @@ export interface User {
   role: Role;
   points: number;
   level?: number;
+  avatarUrl?: string | null;
   badges?: any[];
   isGuest?: boolean;
   stats?: {
     roomsAdded: number;
     reviewsWritten: number;
   };
+}
+
+export interface EditProposal {
+  id: string;
+  lactarioId: string;
+  lactario?: { id: string; name: string; address?: string; placeType?: string };
+  proposedBy?: { id: string; name?: string; email: string; role: string };
+  name?: string;
+  address?: string;
+  description?: string;
+  amenities: string[];
+  tags: string[];
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reviewedBy?: { id: string; name?: string; email: string };
+  reviewedAt?: string;
+  rejectionNotes?: string;
+  createdAt: string;
 }
 
 // === Nursing Timer Types ===

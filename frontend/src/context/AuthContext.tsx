@@ -38,6 +38,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const response = await api.post('/auth/login', { email, password: pass });
     const { token, user: userData } = response.data;
 
+    // Clear old nursing/local data before setting new user
+    await AsyncStorage.removeItem('@Nursing:babies');
+    await AsyncStorage.removeItem('@Nursing:sessions');
+    await AsyncStorage.removeItem('@Nursing:activeBaby');
+
     await AsyncStorage.setItem('@Auth:user', JSON.stringify(userData));
     await AsyncStorage.setItem('@Auth:token', token);
 
@@ -48,6 +53,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   async function signOut() {
     await AsyncStorage.removeItem('@Auth:token');
     await AsyncStorage.removeItem('@Auth:user');
+    // Clear nursing/local data
+    await AsyncStorage.removeItem('@Nursing:babies');
+    await AsyncStorage.removeItem('@Nursing:sessions');
+    await AsyncStorage.removeItem('@Nursing:activeBaby');
     delete api.defaults.headers.common['Authorization'];
     setUser(null);
   }
@@ -55,6 +64,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   async function register(email: string, pass: string, name?: string) {
     const response = await api.post('/auth/register', { email, password: pass, name });
     const { token, user: userData } = response.data;
+
+    // Clear old nursing/local data before setting new user
+    await AsyncStorage.removeItem('@Nursing:babies');
+    await AsyncStorage.removeItem('@Nursing:sessions');
+    await AsyncStorage.removeItem('@Nursing:activeBaby');
 
     await AsyncStorage.setItem('@Auth:user', JSON.stringify(userData));
     await AsyncStorage.setItem('@Auth:token', token);

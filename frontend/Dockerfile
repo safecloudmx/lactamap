@@ -17,8 +17,8 @@ RUN echo "EXPO_PUBLIC_API_BASE_URL=${EXPO_PUBLIC_API_BASE_URL}" > .env && \
     echo "EXPO_PUBLIC_API_URL=${EXPO_PUBLIC_API_BASE_URL}" >> .env && \
     cat .env
 
-# Build for web
-RUN npm run build
+# Build for web (increase heap size to avoid OOM during Metro bundling)
+RUN NODE_OPTIONS=--max-old-space-size=2048 npm run build
 
 # Production - serve with Node
 FROM node:22-alpine

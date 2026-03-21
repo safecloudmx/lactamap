@@ -33,3 +33,6 @@ web-build/
 
 # Prisma
 /backend/prisma/migrations/
+lactamap_deploy_new
+lactamap_deploy_new.pub
+known_hosts

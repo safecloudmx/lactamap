@@ -67,10 +67,17 @@ export default function AdminReviewScreen() {
   // Shared reject modal
   const [rejectModal, setRejectModal] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIdName, setSelectedIdName] = useState('');
   const [selectedReason, setSelectedReason] = useState('');
   const [rejectNotes, setRejectNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
+
+  // Approve confirm modal
+  const [approveModal, setApproveModal] = useState(false);
+  const [approveTargetId, setApproveTargetId] = useState<string | null>(null);
+  const [approveTargetName, setApproveTargetName] = useState('');
+  const [approveType, setApproveType] = useState<'submission' | 'proposal'>('submission');
 
   const fetchSubmissions = useCallback(async () => {
     try {
@@ -120,31 +127,37 @@ export default function AdminReviewScreen() {
   );
 
   const handleApproveSubmission = (id: string, name: string) => {
-    Alert.alert('Aprobar aporte', `¿Confirmas la aprobación de "${name}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Aprobar', onPress: async () => {
-          setApprovingId(id);
-          try { await approveSubmission(id); fetchSubmissions(); }
-          catch (err: any) { Alert.alert('Error', err.response?.data?.error || 'No se pudo aprobar'); }
-          finally { setApprovingId(null); }
-        },
-      },
-    ]);
+    setApproveTargetId(id);
+    setApproveTargetName(name);
+    setApproveType('submission');
+    setApproveModal(true);
   };
 
   const handleApproveProposal = (id: string, name: string) => {
-    Alert.alert('Aprobar propuesta', `¿Aplicar los cambios propuestos para "${name}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Aprobar', onPress: async () => {
-          setApprovingId(id);
-          try { await approveEditProposal(id); fetchProposals(); }
-          catch (err: any) { Alert.alert('Error', err.response?.data?.error || 'No se pudo aprobar'); }
-          finally { setApprovingId(null); }
-        },
-      },
-    ]);
+    setApproveTargetId(id);
+    setApproveTargetName(name);
+    setApproveType('proposal');
+    setApproveModal(true);
+  };
+
+  const handleApproveConfirm = async () => {
+    if (!approveTargetId) return;
+    setApprovingId(approveTargetId);
+    setApproveModal(false);
+    try {
+      if (approveType === 'submission') {
+        await approveSubmission(approveTargetId);
+        fetchSubmissions();
+      } else {
+        await approveEditProposal(approveTargetId);
+        fetchProposals();
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'No se pudo aprobar');
+    } finally {
+      setApprovingId(null);
+      setApproveTargetId(null);
+    }
   };
 
   const openRejectModal = (id: string) => {
@@ -466,6 +479,32 @@ export default function AdminReviewScreen() {
           />
         )
       )}
+
+      {/* Approve confirm modal */}
+      <Modal visible={approveModal} transparent animationType="fade" onRequestClose={() => setApproveModal(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalSheet, { paddingBottom: spacing.xxl }]}>
+            <CheckCircle size={32} color={colors.success} style={{ alignSelf: 'center', marginBottom: spacing.md } as any} />
+            <Text style={[styles.modalTitle, { textAlign: 'center' }]}>
+              {approveType === 'submission' ? 'Aprobar aporte' : 'Aprobar propuesta'}
+            </Text>
+            <Text style={[typography.body, { color: colors.slate[600], textAlign: 'center', marginBottom: spacing.xl }]}>
+              {approveType === 'submission'
+                ? `¿Confirmas la publicación de "${approveTargetName}"?`
+                : `¿Aplicar los cambios propuestos para "${approveTargetName}"?`}
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setApproveModal(false)}>
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.approveBtn, { flex: 1 }]} onPress={handleApproveConfirm}>
+                <CheckCircle size={16} color={colors.white} />
+                <Text style={styles.approveBtnText}>Sí, aprobar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Reject modal */}
       <Modal visible={rejectModal} transparent animationType="slide" onRequestClose={() => setRejectModal(false)}>

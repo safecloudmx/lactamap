@@ -59,6 +59,7 @@ const getAll = async (req: Request, res: Response) => {
     })));
     res.json(result);
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: 'Error fetching lactarios' });
   }
 };

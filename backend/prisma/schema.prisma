@@ -138,6 +138,7 @@ model Lactario {
   tags            String[]         @default([])
   placeType       String           @default("LACTARIO")
   genderAccess    String           @default("Unisex/Familiar")
+  isPrivate       Boolean          @default(false)
   imageUrl        String?
 
   createdAt       DateTime @default(now())

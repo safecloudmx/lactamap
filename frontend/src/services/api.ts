@@ -85,6 +85,7 @@ export const createLactario = async (data: {
   tags?: string[];
   placeType?: string;
   genderAccess?: string;
+  isPrivate?: boolean;
 }) => {
   const response = await api.post('/lactarios', data);
   return response.data;

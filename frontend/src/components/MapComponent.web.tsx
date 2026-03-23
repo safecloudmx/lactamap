@@ -51,16 +51,20 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
         const badgeBg = pt === 'CAMBIADOR' ? '#ede9fe' : pt === 'BANO_FAMILIAR' ? '#ccfbf1' : pt === 'PUNTO_INTERES' ? '#fef3c7' : '#fff1f2';
         const badgeColor = pt === 'CAMBIADOR' ? '#7c3aed' : pt === 'BANO_FAMILIAR' ? '#0f766e' : pt === 'PUNTO_INTERES' ? '#d97706' : '#e11d48';
         const badgeLabel = pt === 'CAMBIADOR' ? '🚼 Cambiador' : pt === 'BANO_FAMILIAR' ? '🚻 Baño Familiar' : pt === 'PUNTO_INTERES' ? '⭐ Punto de Interés' : '🤱 Lactario';
+        const priv = l.isPrivate === true;
+        const pinClass = priv ? 'custom-pin pin-private' : 'custom-pin';
+        const privateBadge = priv ? `'<span style="font-size:11px;background:#eef2ff;color:#4338ca;padding:2px 8px;border-radius:99px;font-weight:700;margin-left:4px">🔒 Acceso Restringido</span>'+` : '';
         return (
           `(function(){` +
           `var el=document.createElement('div');` +
-          `el.className='custom-pin';` +
+          `el.className='${pinClass}';` +
           `el.innerHTML='<div class="pin-head" style="background:${pinColor}">${iconSvg}</div><div class="pin-tail" style="border-top-color:${pinColor}"></div>';` +
           `var icon=L.divIcon({className:'',html:el.outerHTML,iconSize:[32,42],iconAnchor:[16,42],popupAnchor:[0,-48]});` +
           `var popupContent='<div style="font-family:sans-serif;min-width:200px;border-radius:10px;overflow:hidden;margin:-1px">'+` +
           (l.imageUrl ? `'<img src="${l.imageUrl}" style="width:100%;height:110px;object-fit:cover;display:block" />'+` : ``) +
           `'<div style="padding:10px 12px 4px">'+` +
           `'<span style="font-size:11px;background:${badgeBg};color:${badgeColor};padding:2px 8px;border-radius:99px;font-weight:700">${badgeLabel}</span>'+` +
+          privateBadge +
           `'<div style="font-weight:700;margin-top:5px;font-size:14px">${l.name.replace(/'/g, "\\'").replace(/"/g, '&quot;')}</div>'+` +
           `'<div style="color:#64748b;font-size:12px;margin-top:2px;margin-bottom:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${(l.description || '').replace(/'/g, "\\'").replace(/"/g, '&quot;')}</div>'+` +
           `'</div>'+` +
@@ -85,6 +89,10 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
     border:2.5px solid #fff;
     display:flex; align-items:center; justify-content:center;
     box-shadow:0 2px 6px rgba(0,0,0,0.25);
+  }
+  .pin-private .pin-head {
+    border:2.5px dotted #000000;
+    box-shadow:0 2px 8px rgba(0,0,0,0.4);
   }
   .pin-tail {
     width:0; height:0; margin:0 auto;

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, Animated, StyleSheet, Dimensions } from 'react-native';
-import { ChevronRight, X, Users } from 'lucide-react-native';
+import { ChevronRight, X, Users, Lock } from 'lucide-react-native';
 import { Lactario } from '../../types';
 import { colors, spacing, typography, radii, shadows } from '../../theme';
 import { Rating } from '../ui';
@@ -49,13 +49,28 @@ export default function MarkerPreviewSheet({ lactario, onViewDetail, onDismiss }
         <View style={styles.nameRow}>
           <Text style={styles.name} numberOfLines={1}>{lactario.name}</Text>
           {lactario.placeType && (
-            <View style={[styles.typeBadge, lactario.placeType === 'CAMBIADOR' && styles.typeBadgeCambiador]}>
-              <Text style={[styles.typeBadgeText, lactario.placeType === 'CAMBIADOR' && styles.typeBadgeTextCambiador]}>
-                {lactario.placeType === 'CAMBIADOR' ? '🚼 Cambiador' : '🤱 Lactario'}
+            <View style={[styles.typeBadge,
+              lactario.placeType === 'CAMBIADOR' && styles.typeBadgeCambiador,
+              lactario.placeType === 'BANO_FAMILIAR' && { backgroundColor: '#ccfbf1' },
+              lactario.placeType === 'PUNTO_INTERES' && { backgroundColor: '#fef3c7' },
+            ]}>
+              <Text style={[styles.typeBadgeText,
+                lactario.placeType === 'CAMBIADOR' && styles.typeBadgeTextCambiador,
+                lactario.placeType === 'BANO_FAMILIAR' && { color: '#0f766e' },
+                lactario.placeType === 'PUNTO_INTERES' && { color: '#d97706' },
+              ]}>
+                {lactario.placeType === 'CAMBIADOR' ? '🚼 Cambiador' : lactario.placeType === 'BANO_FAMILIAR' ? '🚻 Baño Familiar' : lactario.placeType === 'PUNTO_INTERES' ? '⭐ Punto de Interés' : '🤱 Lactario'}
               </Text>
             </View>
           )}
         </View>
+
+        {lactario.isPrivate && (
+          <View style={styles.privateBadgeRow}>
+            <Lock size={12} color="#4338ca" />
+            <Text style={styles.privateBadgeText}>Acceso Restringido</Text>
+          </View>
+        )}
 
         <View style={styles.row}>
           <Rating value={lactario.rating || 0} size={14} />
@@ -150,6 +165,22 @@ const styles = StyleSheet.create({
   },
   typeBadgeTextCambiador: {
     color: '#7c3aed',
+  },
+  privateBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#eef2ff',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radii.full,
+    alignSelf: 'flex-start',
+  },
+  privateBadgeText: {
+    ...typography.caption,
+    color: '#4338ca',
+    fontWeight: '700',
+    fontSize: 11,
   },
   row: {
     flexDirection: 'row',

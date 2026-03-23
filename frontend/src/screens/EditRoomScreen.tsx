@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Alert, StyleSheet, Modal, Platform, ActionSheetIOS,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { Check, Plus, X, MapPin, Camera, ImagePlus } from 'lucide-react-native';
+import { Check, Plus, X, MapPin, Camera, ImagePlus, Lock } from 'lucide-react-native';
 import { Amenity, GenderAccess, Lactario } from '../types';
 import { AMENITY_LABELS } from '../constants';
 import { updateLactario, createEditProposal, uploadPhoto, deletePhoto } from '../services/api';
@@ -83,6 +83,7 @@ export default function EditRoomScreen() {
 
   const [description, setDescription] = useState(room.description || '');
   const [address, setAddress] = useState(room.address || '');
+  const [isPrivate, setIsPrivate] = useState((room as any).isPrivate || false);
 
   // Parse existing genderAccess (could be "Hombres, Mujeres" or single value)
   const parseAccessSelection = (): string[] => {
@@ -220,6 +221,10 @@ export default function EditRoomScreen() {
       prev.includes(spec) ? prev.filter((s) => s !== spec) : [...prev, spec]
     );
 
+  const handlePrivateToggle = () => {
+    setIsPrivate(!isPrivate);
+  };
+
   const canSave = establishmentName.trim().length >= 3 && locationName.trim().length >= 2;
 
   const handleSave = async () => {
@@ -237,6 +242,7 @@ export default function EditRoomScreen() {
         amenities,
         tags,
         genderAccess: genderAccessValue,
+        isPrivate,
         ...(pickedLocation && {
           latitude: pickedLocation.latitude,
           longitude: pickedLocation.longitude,
@@ -460,6 +466,23 @@ export default function EditRoomScreen() {
           )}
         </View>
 
+        {/* Private Location Toggle */}
+        <View style={styles.section}>
+          <Text style={styles.label}>Acceso</Text>
+          <TouchableOpacity style={[styles.privateToggle, isPrivate && styles.privateToggleActive]} onPress={handlePrivateToggle} activeOpacity={0.8}>
+            <View style={[styles.privateToggleIcon, isPrivate && styles.privateToggleIconActive]}>
+              <Lock size={18} color={isPrivate ? '#fff' : '#6366f1'} />
+            </View>
+            <View style={styles.privateToggleContent}>
+              <Text style={[styles.privateToggleTitle, isPrivate && styles.privateToggleTitleActive]}>Acceso Restringido</Text>
+              <Text style={styles.privateToggleDesc}>Ubicación dentro de una institución privada</Text>
+            </View>
+            <View style={[styles.privateToggleCheck, isPrivate && styles.privateToggleCheckActive]}>
+              {isPrivate && <Check size={14} color="#fff" />}
+            </View>
+          </TouchableOpacity>
+        </View>
+
         {/* Access */}
         {isAccessLocked ? (
           <View style={styles.section}>
@@ -565,4 +588,14 @@ const styles = StyleSheet.create({
   photoDeleteBtn: { position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
   addPhotoBtn: { width: 90, height: 90, borderRadius: radii.md, borderWidth: 2, borderColor: colors.slate[200], borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: colors.slate[50] },
   addPhotoBtnText: { ...typography.caption, color: colors.slate[400] },
+  privateToggle: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderWidth: 2, borderColor: colors.slate[200], borderRadius: radii.lg, padding: spacing.lg, backgroundColor: colors.slate[50] },
+  privateToggleActive: { borderColor: '#6366f1', backgroundColor: '#eef2ff' },
+  privateToggleIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#eef2ff', alignItems: 'center', justifyContent: 'center' },
+  privateToggleIconActive: { backgroundColor: '#6366f1' },
+  privateToggleContent: { flex: 1 },
+  privateToggleTitle: { ...typography.bodyBold, color: colors.slate[700] },
+  privateToggleTitleActive: { color: '#4338ca' },
+  privateToggleDesc: { ...typography.caption, color: colors.slate[400], marginTop: 2 },
+  privateToggleCheck: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: colors.slate[300], alignItems: 'center', justifyContent: 'center' },
+  privateToggleCheckActive: { backgroundColor: '#6366f1', borderColor: '#6366f1' },
 });

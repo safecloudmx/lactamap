@@ -55,6 +55,7 @@ export interface Lactario {
   imageUrl?: string;
   photos?: { id: string; url: string }[];
   isVerified?: boolean;
+  isPrivate?: boolean;
   createdBy?: string;
   tags?: string[];
 }

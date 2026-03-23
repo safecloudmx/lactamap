@@ -5,7 +5,7 @@ import {
   ActionSheetIOS, Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Camera, Check, ImagePlus, AlertTriangle, Plus, X, MapPin } from 'lucide-react-native';
+import { Camera, Check, ImagePlus, AlertTriangle, Plus, X, MapPin, Lock, Info } from 'lucide-react-native';
 import { Amenity, GenderAccess } from '../types';
 import { AMENITY_LABELS } from '../constants';
 import { createLactario } from '../services/api';
@@ -84,6 +84,8 @@ export default function AddRoomScreen() {
   const [selectedBathroomSpecs, setSelectedBathroomSpecs] = useState<string[]>([]);
   const [selectedPoiTypes, setSelectedPoiTypes] = useState<string[]>([]);
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [showPrivateInfo, setShowPrivateInfo] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showConsent, setShowConsent] = useState(false);
 
@@ -204,6 +206,19 @@ export default function AddRoomScreen() {
   };
   const removeTag = (t: string) => setTags(tags.filter((x) => x !== t));
 
+  // Private location toggle — always show modal when enabling
+  const handlePrivateToggle = () => {
+    if (!isPrivate) {
+      setShowPrivateInfo(true);
+    } else {
+      setIsPrivate(false);
+    }
+  };
+  const handlePrivateConfirm = () => {
+    setIsPrivate(true);
+    setShowPrivateInfo(false);
+  };
+
   // Map picker
   const handleMapPickerConfirm = async () => {
     setPickedLocation(pickerCoords);
@@ -242,14 +257,25 @@ export default function AddRoomScreen() {
         tags: finalTags,
         placeType: placeType!,
         genderAccess: genderAccessValue,
+        isPrivate,
       });
-      Alert.alert(
-        result.requiresReview ? 'Enviado para revisión' : '¡Publicado!',
-        result.requiresReview
-          ? 'Tu aporte fue enviado y será publicado tras ser aprobado por un moderador.'
-          : 'El lugar fue publicado exitosamente.',
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
-      );
+      if (Platform.OS === 'web') {
+        navigation.goBack();
+        Alert.alert(
+          result.requiresReview ? 'Solicitud enviada' : 'Ubicación agregada',
+          result.requiresReview
+            ? 'Tu aporte fue enviado y será publicado tras ser aprobado por un moderador.'
+            : 'El lugar fue publicado exitosamente.'
+        );
+      } else {
+        Alert.alert(
+          result.requiresReview ? 'Enviado para revisión' : '¡Publicado!',
+          result.requiresReview
+            ? 'Tu aporte fue enviado y será publicado tras ser aprobado por un moderador.'
+            : 'El lugar fue publicado exitosamente.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+      }
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.error || 'Error al guardar');
     } finally {
@@ -335,6 +361,39 @@ export default function AddRoomScreen() {
               </TouchableOpacity>
               <TouchableOpacity style={styles.confirmBtn} onPress={handleConsentConfirm}>
                 <Text style={styles.confirmBtnText}>Acepto y envío</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Private Location Info Modal */}
+      <Modal visible={showPrivateInfo} transparent animationType="fade" onRequestClose={() => setShowPrivateInfo(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconRow}><Lock size={28} color="#6366f1" /></View>
+            <Text style={styles.modalTitle}>Ubicación con Acceso Restringido</Text>
+            <Text style={styles.privateModalDesc}>
+              Estás marcando esta ubicación como de <Text style={styles.bold}>acceso restringido</Text>. Esto significa que se encuentra dentro de una institución privada como:
+            </Text>
+            <View style={styles.bulletList}>
+              <Text style={styles.bullet}>• Empresas o zonas de trabajo</Text>
+              <Text style={styles.bullet}>• Escuelas o universidades</Text>
+              <Text style={styles.bullet}>• Deportivos o clubes privados</Text>
+              <Text style={styles.bullet}>• Hospitales o clínicas</Text>
+            </View>
+            <View style={styles.privateModalNote}>
+              <Info size={16} color="#6366f1" />
+              <Text style={styles.privateModalNoteText}>
+                Esta ubicación aparecerá en el mapa con un indicador especial para que otros usuarios sepan que el acceso <Text style={styles.bold}>no es público</Text>.
+              </Text>
+            </View>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowPrivateInfo(false)}>
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.confirmBtn, { backgroundColor: '#6366f1' }]} onPress={handlePrivateConfirm}>
+                <Text style={styles.confirmBtnText}>Entendido</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -483,6 +542,23 @@ export default function AddRoomScreen() {
                 placeholder="¿Cómo es el espacio? ¿Es limpio, privado?"
                 placeholderTextColor={colors.slate[400]} multiline numberOfLines={3}
                 value={description} onChangeText={setDescription} />
+            </View>
+
+            {/* Private Location Toggle */}
+            <View style={styles.section}>
+              <Text style={styles.label}>Acceso</Text>
+              <TouchableOpacity style={[styles.privateToggle, isPrivate && styles.privateToggleActive]} onPress={handlePrivateToggle} activeOpacity={0.8}>
+                <View style={[styles.privateToggleIcon, isPrivate && styles.privateToggleIconActive]}>
+                  <Lock size={18} color={isPrivate ? '#fff' : '#6366f1'} />
+                </View>
+                <View style={styles.privateToggleContent}>
+                  <Text style={[styles.privateToggleTitle, isPrivate && styles.privateToggleTitleActive]}>Acceso Restringido</Text>
+                  <Text style={styles.privateToggleDesc}>Ubicación dentro de una institución privada</Text>
+                </View>
+                <View style={[styles.privateToggleCheck, isPrivate && styles.privateToggleCheckActive]}>
+                  {isPrivate && <Check size={14} color="#fff" />}
+                </View>
+              </TouchableOpacity>
             </View>
 
             {/* Tags */}
@@ -668,6 +744,21 @@ const styles = StyleSheet.create({
   tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
   tagChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primary[50], paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radii.full, borderWidth: 1, borderColor: colors.primary[200] },
   tagChipText: { ...typography.caption, color: colors.primary[600], fontWeight: '600' },
+
+  // Private toggle
+  privateToggle: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderWidth: 2, borderColor: colors.slate[200], borderRadius: radii.lg, padding: spacing.lg, backgroundColor: colors.slate[50] },
+  privateToggleActive: { borderColor: '#6366f1', backgroundColor: '#eef2ff' },
+  privateToggleIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#eef2ff', alignItems: 'center', justifyContent: 'center' },
+  privateToggleIconActive: { backgroundColor: '#6366f1' },
+  privateToggleContent: { flex: 1 },
+  privateToggleTitle: { ...typography.bodyBold, color: colors.slate[700] },
+  privateToggleTitleActive: { color: '#4338ca' },
+  privateToggleDesc: { ...typography.caption, color: colors.slate[400], marginTop: 2 },
+  privateToggleCheck: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: colors.slate[300], alignItems: 'center', justifyContent: 'center' },
+  privateToggleCheckActive: { backgroundColor: '#6366f1', borderColor: '#6366f1' },
+  privateModalDesc: { ...typography.small, color: colors.slate[600], lineHeight: 22, marginBottom: spacing.md },
+  privateModalNote: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, backgroundColor: '#eef2ff', padding: spacing.md, borderRadius: radii.md, marginBottom: spacing.xl },
+  privateModalNoteText: { ...typography.small, color: '#4338ca', flex: 1, lineHeight: 20 },
 
   // Modals
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: spacing.xxl },

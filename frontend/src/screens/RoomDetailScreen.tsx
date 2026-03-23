@@ -24,12 +24,12 @@ import {
   ArrowLeft,
   MapPin,
   BadgeCheck,
+  Lock,
   Baby,
   Armchair,
   Droplets,
   Zap,
   Plug,
-  Lock,
   Snowflake,
   Wind,
   MessageSquare,
@@ -461,9 +461,22 @@ export default function RoomDetailScreen() {
           {/* Type + Verified */}
           <View style={styles.badgeRow}>
             {room.placeType && (
-              <View style={[styles.placeTypeBadge, room.placeType === 'CAMBIADOR' && styles.placeTypeBadgeCambiador]}>
-                <Text style={[styles.placeTypeBadgeText, room.placeType === 'CAMBIADOR' && styles.placeTypeBadgeTextCambiador]}>
-                  {room.placeType === 'CAMBIADOR' ? '🚼 Cambiador' : '🤱 Lactario'}
+              <View style={[
+                styles.placeTypeBadge,
+                room.placeType === 'CAMBIADOR' && styles.placeTypeBadgeCambiador,
+                room.placeType === 'BANO_FAMILIAR' && styles.placeTypeBadgeBanoFamiliar,
+                room.placeType === 'PUNTO_INTERES' && styles.placeTypeBadgePuntoInteres,
+              ]}>
+                <Text style={[
+                  styles.placeTypeBadgeText,
+                  room.placeType === 'CAMBIADOR' && styles.placeTypeBadgeTextCambiador,
+                  room.placeType === 'BANO_FAMILIAR' && styles.placeTypeBadgeTextBanoFamiliar,
+                  room.placeType === 'PUNTO_INTERES' && styles.placeTypeBadgeTextPuntoInteres,
+                ]}>
+                  {room.placeType === 'CAMBIADOR' ? '🚼 Cambiador'
+                    : room.placeType === 'BANO_FAMILIAR' ? '🚻 Baño Familiar'
+                    : room.placeType === 'PUNTO_INTERES' ? '⭐ Punto de Interés'
+                    : '🤱 Lactario'}
                 </Text>
               </View>
             )}
@@ -471,6 +484,12 @@ export default function RoomDetailScreen() {
               <View style={styles.verifiedTag}>
                 <BadgeCheck size={14} color={colors.success} />
                 <Text style={styles.verifiedText}>Verificado</Text>
+              </View>
+            )}
+            {room.isPrivate && (
+              <View style={styles.privateTag}>
+                <Lock size={14} color="#4338ca" />
+                <Text style={styles.privateTagText}>Acceso Restringido</Text>
               </View>
             )}
             {isReviewer && (
@@ -949,12 +968,24 @@ const styles = StyleSheet.create({
   placeTypeBadgeCambiador: {
     backgroundColor: '#ede9fe',
   },
+  placeTypeBadgeBanoFamiliar: {
+    backgroundColor: '#ccfbf1',
+  },
+  placeTypeBadgePuntoInteres: {
+    backgroundColor: '#fef3c7',
+  },
   placeTypeBadgeText: {
     ...typography.captionBold,
     color: '#e11d48',
   },
   placeTypeBadgeTextCambiador: {
     color: '#7c3aed',
+  },
+  placeTypeBadgeTextBanoFamiliar: {
+    color: '#0f766e',
+  },
+  placeTypeBadgeTextPuntoInteres: {
+    color: '#d97706',
   },
   body: {
     padding: spacing.lg,
@@ -1044,6 +1075,19 @@ const styles = StyleSheet.create({
   verifiedText: {
     ...typography.captionBold,
     color: colors.success,
+  },
+  privateTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: '#eef2ff',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.full,
+  },
+  privateTagText: {
+    ...typography.captionBold,
+    color: '#4338ca',
   },
   verifyBtn: {
     flexDirection: 'row',

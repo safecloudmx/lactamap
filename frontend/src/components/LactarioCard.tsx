@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
-import { MapPin } from 'lucide-react-native';
+import { MapPin, Lock } from 'lucide-react-native';
 import { Lactario } from '../types';
 import { AMENITY_LABELS } from '../constants';
 import { colors, spacing, typography, radii } from '../theme';
@@ -34,6 +34,12 @@ export default function LactarioCard({ lactario, onPress, showStatus }: Lactario
         {lactario.isVerified && (
           <View style={styles.verifiedBadge}>
             <Text style={styles.verifiedText}>Verificado</Text>
+          </View>
+        )}
+        {lactario.isPrivate && (
+          <View style={styles.privateBadge}>
+            <Lock size={10} color="#fff" />
+            <Text style={styles.privateText}>Acceso Restringido</Text>
           </View>
         )}
       </View>
@@ -100,6 +106,23 @@ const styles = StyleSheet.create({
   verifiedText: {
     ...typography.captionBold,
     color: colors.white,
+  },
+  privateBadge: {
+    position: 'absolute',
+    bottom: spacing.sm,
+    left: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#6366f1',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.sm,
+  },
+  privateText: {
+    ...typography.captionBold,
+    color: colors.white,
+    fontSize: 10,
   },
   content: {
     padding: spacing.lg,

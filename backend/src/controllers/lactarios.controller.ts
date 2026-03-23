@@ -127,7 +127,7 @@ export const mapAmenitiesToDB = (amenities: string[]) => ({
 
 const create = async (req: Request, res: Response) => {
   try {
-    const { name, latitude, longitude, address, description, amenities, tags, placeType, genderAccess } = req.body;
+    const { name, latitude, longitude, address, description, amenities, tags, placeType, genderAccess, isPrivate } = req.body;
     const userId = (req as any).user?.userId;
     const userRole = (req as any).user?.role;
 
@@ -151,6 +151,7 @@ const create = async (req: Request, res: Response) => {
         status: lactarioStatus,
         placeType: ['CAMBIADOR', 'BANO_FAMILIAR', 'PUNTO_INTERES'].includes(placeType) ? placeType : 'LACTARIO',
         ...(genderAccess && { genderAccess }),
+        ...(isPrivate !== undefined && { isPrivate: Boolean(isPrivate) }),
         ownerId: userId,
         tags: tagList,
         amenities: {
@@ -198,7 +199,7 @@ const update = async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const { name, address, description, status, amenities, tags, latitude, longitude, genderAccess } = req.body;
+    const { name, address, description, status, amenities, tags, latitude, longitude, genderAccess, isPrivate } = req.body;
     const tagList = Array.isArray(tags) ? tags.map((t: string) => t.toLowerCase().trim()).filter(Boolean) : undefined;
 
     const updated = await prisma.lactario.update({
@@ -209,6 +210,7 @@ const update = async (req: Request, res: Response) => {
         ...(latitude !== undefined && { latitude: Number(latitude) }),
         ...(longitude !== undefined && { longitude: Number(longitude) }),
         ...(genderAccess !== undefined && { genderAccess }),
+        ...(isPrivate !== undefined && { isPrivate: Boolean(isPrivate) }),
       },
     });
 

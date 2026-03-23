@@ -58,7 +58,7 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
           `el.innerHTML='<div class="pin-head" style="background:${pinColor}">${iconSvg}</div><div class="pin-tail" style="border-top-color:${pinColor}"></div>';` +
           `var icon=L.divIcon({className:'',html:el.outerHTML,iconSize:[32,42],iconAnchor:[16,42],popupAnchor:[0,-48]});` +
           `var popupContent='<div style="font-family:sans-serif;min-width:200px;border-radius:10px;overflow:hidden;margin:-1px">'+` +
-          (l.imageUrl ? `'<img src="${l.imageUrl}" style="width:100%;height:110px;object-fit:cover;display:block" />'+` : `''`) +
+          (l.imageUrl ? `'<img src="${l.imageUrl}" style="width:100%;height:110px;object-fit:cover;display:block" />'+` : ``) +
           `'<div style="padding:10px 12px 4px">'+` +
           `'<span style="font-size:11px;background:${badgeBg};color:${badgeColor};padding:2px 8px;border-radius:99px;font-weight:700">${badgeLabel}</span>'+` +
           `'<div style="font-weight:700;margin-top:5px;font-size:14px">${l.name.replace(/'/g, "\\'").replace(/"/g, '&quot;')}</div>'+` +

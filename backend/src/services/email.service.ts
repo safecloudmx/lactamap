@@ -1,7 +1,7 @@
 import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = process.env.SMTP_FROM || 'LactaMap <noreply@lactamap.app>';
+const FROM = 'LactaMap <noreply@lactamap.app>';
 
 const brandHtml = (content: string) => `
   <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:480px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #f1f5f9">

@@ -127,7 +127,7 @@ export const mapAmenitiesToDB = (amenities: string[]) => ({
 
 const create = async (req: Request, res: Response) => {
   try {
-    const { name, latitude, longitude, address, description, amenities, tags, placeType } = req.body;
+    const { name, latitude, longitude, address, description, amenities, tags, placeType, genderAccess } = req.body;
     const userId = (req as any).user?.userId;
     const userRole = (req as any).user?.role;
 
@@ -150,6 +150,7 @@ const create = async (req: Request, res: Response) => {
         description,
         status: lactarioStatus,
         placeType: ['CAMBIADOR', 'BANO_FAMILIAR', 'PUNTO_INTERES'].includes(placeType) ? placeType : 'LACTARIO',
+        ...(genderAccess && { genderAccess }),
         ownerId: userId,
         tags: tagList,
         amenities: {

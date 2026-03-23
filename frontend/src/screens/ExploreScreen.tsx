@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useFocusEffect, useNavigation, DrawerActions } from '@react-navigation/native';
 import { SearchX, LayoutGrid, List, MapPin, Star, BadgeCheck } from 'lucide-react-native';
-import { GenderAccess, Lactario } from '../types';
+import { Lactario } from '../types';
 import { getLactarios } from '../services/api';
 import LactarioCard from '../components/LactarioCard';
 import { AppHeader, SearchBar, Chip, EmptyState, PlaceholderImage } from '../components/ui';
@@ -15,15 +15,8 @@ const PLACE_TYPE_FILTERS = [
   { key: 'all', label: 'Todos' },
   { key: 'LACTARIO', label: '🤱 Lactarios' },
   { key: 'CAMBIADOR', label: '🚼 Cambiadores' },
-  { key: 'BANO_FAMILIAR', label: '🚻 Baños' },
-  { key: 'PUNTO_INTERES', label: '⭐ Interés' },
-];
-
-const EXTRA_FILTERS = [
-  { key: 'verified', label: '✓ Verificados' },
-  { key: GenderAccess.WOMEN, label: 'Mujeres' },
-  { key: GenderAccess.MEN, label: 'Hombres' },
-  { key: GenderAccess.NEUTRAL, label: 'Unisex' },
+  { key: 'BANO_FAMILIAR', label: '🚻 Baños Familiares' },
+  { key: 'PUNTO_INTERES', label: '⭐ Puntos de Interés' },
 ];
 
 type ViewMode = 'card' | 'list';
@@ -36,7 +29,6 @@ export default function ExploreScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTypeFilter, setActiveTypeFilter] = useState('all');
-  const [activeExtraFilter, setActiveExtraFilter] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('card');
 
   const fetchLactarios = useCallback(async () => {
@@ -75,15 +67,7 @@ export default function ExploreScreen() {
       matchesType = (item.placeType || 'LACTARIO') === activeTypeFilter;
     }
 
-    // Extra filter
-    let matchesExtra = true;
-    if (activeExtraFilter === 'verified') {
-      matchesExtra = !!item.isVerified;
-    } else if (activeExtraFilter) {
-      matchesExtra = item.access === activeExtraFilter;
-    }
-
-    return matchesSearch && matchesType && matchesExtra;
+    return matchesSearch && matchesType;
   });
 
   const handleOpenDrawer = () => {
@@ -94,14 +78,9 @@ export default function ExploreScreen() {
     navigation.navigate('RoomDetail', { room });
   };
 
-  const handleExtraFilter = (key: string) => {
-    setActiveExtraFilter((prev) => (prev === key ? null : key));
-  };
-
   const clearFilters = () => {
     setSearchQuery('');
     setActiveTypeFilter('all');
-    setActiveExtraFilter(null);
   };
 
   const renderCardItem = ({ item }: { item: Lactario }) => (
@@ -185,24 +164,6 @@ export default function ExploreScreen() {
               label={item.label}
               selected={activeTypeFilter === item.key}
               onPress={() => setActiveTypeFilter(item.key)}
-            />
-          )}
-        />
-      </View>
-
-      {/* Extra filters */}
-      <View style={styles.filtersWrapper}>
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={EXTRA_FILTERS}
-          keyExtractor={(item) => item.key}
-          contentContainerStyle={styles.filtersContent}
-          renderItem={({ item }) => (
-            <Chip
-              label={item.label}
-              selected={activeExtraFilter === item.key}
-              onPress={() => handleExtraFilter(item.key)}
             />
           )}
         />

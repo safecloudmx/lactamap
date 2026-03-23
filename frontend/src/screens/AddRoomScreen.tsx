@@ -74,10 +74,11 @@ export default function AddRoomScreen() {
   const isPrivileged = ADMIN_ROLES.includes(user?.role ?? '');
 
   const [placeType, setPlaceType] = useState<PlaceType | null>(null);
-  const [name, setName] = useState('');
+  const [establishmentName, setEstablishmentName] = useState('');
+  const [locationName, setLocationName] = useState('');
   const [description, setDescription] = useState('');
   const [address, setAddress] = useState('');
-  const [access, setAccess] = useState<GenderAccess>(GenderAccess.NEUTRAL);
+  const [accessSelection, setAccessSelection] = useState<string[]>([GenderAccess.NEUTRAL]);
   const [selectedAmenities, setSelectedAmenities] = useState<Amenity[]>([]);
   const [selectedSpecs, setSelectedSpecs] = useState<string[]>([]);
   const [selectedBathroomSpecs, setSelectedBathroomSpecs] = useState<string[]>([]);
@@ -97,6 +98,47 @@ export default function AddRoomScreen() {
   const fileInputRef = useRef<any>(null);
 
   const effectiveLocation = pickedLocation ?? currentLocation;
+
+  // Build display name from the two fields
+  const compositeName = locationName.trim()
+    ? `${establishmentName.trim()} — ${locationName.trim()}`
+    : establishmentName.trim();
+
+  // Gender access toggle logic
+  const isAccessLocked = placeType === 'BANO_FAMILIAR' || placeType === 'LACTARIO';
+  const isSingleSelect = placeType === 'PUNTO_INTERES';
+  const handleAccessToggle = (value: string) => {
+    if (isAccessLocked) return;
+    if (isSingleSelect) {
+      setAccessSelection([value]);
+      return;
+    }
+    if (value === GenderAccess.NEUTRAL) {
+      setAccessSelection([GenderAccess.NEUTRAL]);
+    } else {
+      setAccessSelection((prev) => {
+        const withoutNeutral = prev.filter((v) => v !== GenderAccess.NEUTRAL);
+        if (withoutNeutral.includes(value)) {
+          const result = withoutNeutral.filter((v) => v !== value);
+          return result.length === 0 ? [GenderAccess.NEUTRAL] : result;
+        }
+        return [...withoutNeutral, value];
+      });
+    }
+  };
+
+  // Force access based on placeType
+  const handlePlaceTypeChange = (type: PlaceType) => {
+    setPlaceType(type);
+    if (type === 'LACTARIO') {
+      setAccessSelection([GenderAccess.WOMEN]);
+    } else if (type === 'BANO_FAMILIAR') {
+      setAccessSelection([GenderAccess.NEUTRAL]);
+    }
+  };
+
+  // Derive the genderAccess string to send to backend
+  const genderAccessValue = accessSelection.sort().join(', ');
 
   useEffect(() => {
     if (!Location) return;
@@ -171,7 +213,7 @@ export default function AddRoomScreen() {
   };
 
   // Save
-  const canSave = placeType !== null && name.trim().length >= 3;
+  const canSave = placeType !== null && establishmentName.trim().length >= 3 && locationName.trim().length >= 2;
 
   const handleSavePress = () => {
     if (!canSave) return;
@@ -191,7 +233,7 @@ export default function AddRoomScreen() {
         ? [...tags, ...selectedPoiTypes]
         : tags;
       const result = await createLactario({
-        name: name.trim(),
+        name: compositeName,
         latitude: effectiveLocation.latitude,
         longitude: effectiveLocation.longitude,
         address: address.trim() || undefined,
@@ -199,6 +241,7 @@ export default function AddRoomScreen() {
         amenities,
         tags: finalTags,
         placeType: placeType!,
+        genderAccess: genderAccessValue,
       });
       Alert.alert(
         result.requiresReview ? 'Enviado para revisión' : '¡Publicado!',
@@ -354,7 +397,7 @@ export default function AddRoomScreen() {
             <TouchableOpacity
               key={item.key}
               style={[styles.typeCard, placeType === item.key && styles.typeCardSelected]}
-              onPress={() => setPlaceType(item.key)}
+              onPress={() => handlePlaceTypeChange(item.key)}
               activeOpacity={0.8}
             >
               <Text style={styles.typeEmoji}>{item.emoji}</Text>
@@ -397,11 +440,22 @@ export default function AddRoomScreen() {
               )}
             </View>
 
-            {/* Name */}
+            {/* Name — two fields */}
             <View style={styles.section}>
-              <Text style={styles.label}>Nombre del lugar *</Text>
-              <TextInput style={styles.input} placeholder="Ej. Sala de lactancia de Valle Poniente"
-                placeholderTextColor={colors.slate[400]} value={name} onChangeText={setName} />
+              <Text style={styles.label}>Establecimiento *</Text>
+              <TextInput style={styles.input} placeholder="Ej. Liverpool, Sanborns, Hospital Christus"
+                placeholderTextColor={colors.slate[400]} value={establishmentName} onChangeText={setEstablishmentName} />
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.label}>Ubicación / Plaza / Zona *</Text>
+              <TextInput style={styles.input} placeholder="Ej. Plaza Esfera, Valle Poniente, Zona Centro"
+                placeholderTextColor={colors.slate[400]} value={locationName} onChangeText={setLocationName} />
+              {compositeName.length >= 3 && (
+                <Text style={styles.namePreview}>
+                  Se registrará como: <Text style={styles.namePreviewBold}>{compositeName}</Text>
+                </Text>
+              )}
             </View>
 
             {/* Address + Map Picker */}
@@ -464,15 +518,33 @@ export default function AddRoomScreen() {
               )}
             </View>
 
-            {/* Access */}
-            <View style={styles.section}>
-              <Text style={styles.label}>Acceso</Text>
-              <View style={styles.chipsRow}>
-                {Object.values(GenderAccess).map((type) => (
-                  <Chip key={type} label={type} selected={access === type} onPress={() => setAccess(type)} />
-                ))}
+            {/* Access — multi-select */}
+            {/* Access — hidden for locked types, shown for others */}
+            {isAccessLocked ? (
+              <View style={styles.section}>
+                <Text style={styles.label}>Acceso</Text>
+                <Text style={styles.accessHint}>
+                  {placeType === 'LACTARIO'
+                    ? 'Los lactarios son exclusivamente para mujeres'
+                    : 'Los baños familiares son Unisex/Familiar por defecto'}
+                </Text>
+                <Chip label={accessSelection[0]} selected />
               </View>
-            </View>
+            ) : (
+              <View style={styles.section}>
+                <Text style={styles.label}>Acceso</Text>
+                <View style={styles.chipsRow}>
+                  {Object.values(GenderAccess).map((type) => (
+                    <Chip
+                      key={type}
+                      label={type}
+                      selected={accessSelection.includes(type)}
+                      onPress={() => handleAccessToggle(type)}
+                    />
+                  ))}
+                </View>
+              </View>
+            )}
 
             {/* Lactario: full amenities */}
             {placeType === 'LACTARIO' && (
@@ -586,6 +658,9 @@ const styles = StyleSheet.create({
   mapPickerBtnText: { ...typography.small, color: colors.primary[600], fontWeight: '600' },
 
   // Tags
+  namePreview: { ...typography.caption, color: colors.slate[500], marginTop: spacing.sm, paddingHorizontal: spacing.xs },
+  namePreviewBold: { fontWeight: '700', color: colors.primary[600] },
+  accessHint: { ...typography.caption, color: colors.slate[400], marginBottom: spacing.sm },
   tagHint: { ...typography.caption, color: colors.slate[400], marginBottom: spacing.sm },
   tagInputRow: { flexDirection: 'row', gap: spacing.sm },
   tagInput: { flex: 1 },

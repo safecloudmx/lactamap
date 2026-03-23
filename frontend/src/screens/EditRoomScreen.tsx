@@ -70,13 +70,51 @@ export default function EditRoomScreen() {
   const isPrivileged = ADMIN_ROLES.includes(user?.role ?? '');
   const placeType = room.placeType ?? 'LACTARIO';
   const isCambiador = placeType === 'CAMBIADOR';
+  const isBanoFamiliar = placeType === 'BANO_FAMILIAR';
 
-  const [name, setName] = useState(room.name || '');
+  // Parse existing name into establishment + location
+  const parsedName = (room.name || '').split(' — ');
+  const [establishmentName, setEstablishmentName] = useState(parsedName[0] || '');
+  const [locationName, setLocationName] = useState(parsedName[1] || '');
+
+  const compositeName = locationName.trim()
+    ? `${establishmentName.trim()} — ${locationName.trim()}`
+    : establishmentName.trim();
+
   const [description, setDescription] = useState(room.description || '');
   const [address, setAddress] = useState(room.address || '');
-  const [access, setAccess] = useState<GenderAccess>(
-    (room.access as GenderAccess) ?? GenderAccess.NEUTRAL
-  );
+
+  // Parse existing genderAccess (could be "Hombres, Mujeres" or single value)
+  const parseAccessSelection = (): string[] => {
+    const raw = (room.access as string) || (room as any).genderAccess || GenderAccess.NEUTRAL;
+    if (raw.includes(', ')) return raw.split(', ');
+    return [raw];
+  };
+  const [accessSelection, setAccessSelection] = useState<string[]>(parseAccessSelection());
+
+  const isAccessLocked = isBanoFamiliar || placeType === 'LACTARIO';
+  const isSingleSelect = placeType === 'PUNTO_INTERES';
+  const handleAccessToggle = (value: string) => {
+    if (isAccessLocked) return;
+    if (isSingleSelect) {
+      setAccessSelection([value]);
+      return;
+    }
+    if (value === GenderAccess.NEUTRAL) {
+      setAccessSelection([GenderAccess.NEUTRAL]);
+    } else {
+      setAccessSelection((prev) => {
+        const withoutNeutral = prev.filter((v) => v !== GenderAccess.NEUTRAL);
+        if (withoutNeutral.includes(value)) {
+          const result = withoutNeutral.filter((v) => v !== value);
+          return result.length === 0 ? [GenderAccess.NEUTRAL] : result;
+        }
+        return [...withoutNeutral, value];
+      });
+    }
+  };
+
+  const genderAccessValue = accessSelection.sort().join(', ');
   const [selectedAmenities, setSelectedAmenities] = useState<Amenity[]>(
     (room.amenities as Amenity[]) || []
   );
@@ -182,21 +220,23 @@ export default function EditRoomScreen() {
       prev.includes(spec) ? prev.filter((s) => s !== spec) : [...prev, spec]
     );
 
+  const canSave = establishmentName.trim().length >= 3 && locationName.trim().length >= 2;
+
   const handleSave = async () => {
-    if (name.trim().length < 3) {
-      Alert.alert('Error', 'El nombre debe tener al menos 3 caracteres');
+    if (!canSave) {
+      Alert.alert('Error', 'Completa los campos de Establecimiento y Ubicación');
       return;
     }
     setIsSaving(true);
     try {
       const amenities = isCambiador ? selectedSpecs : selectedAmenities.map(String);
       const payload = {
-        name: name.trim(),
+        name: compositeName,
         address: address.trim() || undefined,
         description: description.trim(),
         amenities,
         tags,
-        genderAccess: access,
+        genderAccess: genderAccessValue,
         ...(pickedLocation && {
           latitude: pickedLocation.latitude,
           longitude: pickedLocation.longitude,
@@ -234,10 +274,10 @@ export default function EditRoomScreen() {
         title="Editar Lugar"
         onBack={() => navigation.goBack()}
         rightAction={
-          <TouchableOpacity onPress={handleSave} disabled={isSaving || name.trim().length < 3}>
+          <TouchableOpacity onPress={handleSave} disabled={isSaving || !canSave}>
             {isSaving
               ? <ActivityIndicator size="small" color={colors.primary[500]} />
-              : <Text style={[styles.saveText, name.trim().length < 3 && styles.saveTextDisabled]}>
+              : <Text style={[styles.saveText, !canSave && styles.saveTextDisabled]}>
                   {isPrivileged ? 'Guardar' : 'Proponer'}
                 </Text>
             }
@@ -352,11 +392,23 @@ export default function EditRoomScreen() {
           </View>
         </View>
 
-        {/* Name */}
+        {/* Establishment */}
         <View style={styles.section}>
-          <Text style={styles.label}>Nombre del lugar *</Text>
-          <TextInput style={styles.input} value={name} onChangeText={setName}
-            placeholderTextColor={colors.slate[400]} placeholder="Nombre del lugar" />
+          <Text style={styles.label}>Establecimiento *</Text>
+          <TextInput style={styles.input} value={establishmentName} onChangeText={setEstablishmentName}
+            placeholderTextColor={colors.slate[400]} placeholder="Ej. Liverpool, Sanborns, Hospital Christus" />
+        </View>
+
+        {/* Location / Zone */}
+        <View style={styles.section}>
+          <Text style={styles.label}>Ubicación / Plaza / Zona *</Text>
+          <TextInput style={styles.input} value={locationName} onChangeText={setLocationName}
+            placeholderTextColor={colors.slate[400]} placeholder="Ej. Plaza Esfera, Valle Poniente, Zona Centro" />
+          {compositeName.length >= 3 && (
+            <Text style={styles.namePreview}>
+              Se guardará como: <Text style={styles.namePreviewBold}>{compositeName}</Text>
+            </Text>
+          )}
         </View>
 
         {/* Address + Map Picker */}
@@ -409,14 +461,31 @@ export default function EditRoomScreen() {
         </View>
 
         {/* Access */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Acceso</Text>
-          <View style={styles.chipsRow}>
-            {Object.values(GenderAccess).map((type) => (
-              <Chip key={type} label={type} selected={access === type} onPress={() => setAccess(type)} />
-            ))}
+        {isAccessLocked ? (
+          <View style={styles.section}>
+            <Text style={styles.label}>Acceso</Text>
+            <Text style={styles.accessHint}>
+              {placeType === 'LACTARIO'
+                ? 'Los lactarios son exclusivamente para mujeres'
+                : 'Los baños familiares son Unisex/Familiar por defecto'}
+            </Text>
+            <Chip label={accessSelection[0]} selected />
           </View>
-        </View>
+        ) : (
+          <View style={styles.section}>
+            <Text style={styles.label}>Acceso</Text>
+            <View style={styles.chipsRow}>
+              {Object.values(GenderAccess).map((type) => (
+                <Chip
+                  key={type}
+                  label={type}
+                  selected={accessSelection.includes(type)}
+                  onPress={() => handleAccessToggle(type)}
+                />
+              ))}
+            </View>
+          </View>
+        )}
 
         {/* Lactario amenities */}
         {!isCambiador && (
@@ -464,6 +533,9 @@ const styles = StyleSheet.create({
   section: { marginBottom: spacing.xxl },
   label: { ...typography.smallBold, color: colors.slate[700], marginBottom: spacing.sm, textTransform: 'uppercase', letterSpacing: 0.5 },
   labelOptional: { fontSize: 11, color: colors.slate[400], textTransform: 'none', fontWeight: '400' },
+  namePreview: { ...typography.caption, color: colors.slate[500], marginTop: spacing.sm, paddingHorizontal: spacing.xs },
+  namePreviewBold: { fontWeight: '700', color: colors.primary[600] },
+  accessHint: { ...typography.caption, color: colors.slate[400], marginBottom: spacing.sm },
   input: { backgroundColor: colors.slate[50], borderWidth: 1, borderColor: colors.slate[200], borderRadius: radii.md, padding: spacing.md, fontSize: 16, color: colors.slate[800] },
   inputDisabled: { backgroundColor: colors.slate[100], color: colors.slate[500] },
   textArea: { height: 100, textAlignVertical: 'top' },

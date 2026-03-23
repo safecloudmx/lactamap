@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
 import { colors, radii, spacing, typography } from '../../theme';
 
 interface ChipProps {
@@ -8,15 +8,17 @@ interface ChipProps {
   onPress?: () => void;
   size?: 'sm' | 'md';
   icon?: React.ReactNode;
+  style?: ViewStyle;
 }
 
-export default function Chip({ label, selected, onPress, size = 'md', icon }: ChipProps) {
+export default function Chip({ label, selected, onPress, size = 'md', icon, style }: ChipProps) {
   return (
     <TouchableOpacity
       style={[
         styles.base,
         size === 'sm' && styles.sm,
         selected ? styles.selected : styles.unselected,
+        style,
       ]}
       onPress={onPress}
       activeOpacity={0.7}

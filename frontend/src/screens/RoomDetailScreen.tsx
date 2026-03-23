@@ -45,7 +45,7 @@ import {
   X,
 } from 'lucide-react-native';
 import { Lactario, Review } from '../types';
-import { getLactarioById, getReviews, createReview, updateReview, deleteReview, reportReview } from '../services/api';
+import { getLactarioById, getReviews, createReview, updateReview, deleteReview, reportReview, deleteLactario } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Rating, Card, AvatarInitials, PlaceholderImage } from '../components/ui';
 import { colors, spacing, typography, radii, shadows } from '../theme';
@@ -90,6 +90,8 @@ export default function RoomDetailScreen() {
   const [editRating, setEditRating] = useState(0);
   const [editComment, setEditComment] = useState('');
   const [editSubmitting, setEditSubmitting] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchDetails = useCallback(async () => {
     try {
@@ -208,6 +210,7 @@ export default function RoomDetailScreen() {
       ['ADMIN', 'ELITE', 'DISTINGUISHED'].includes(user?.role ?? '') ||
       (room.owner?.id !== undefined && room.owner.id === user?.id)
     );
+  const isAdmin = user?.role === 'ADMIN';
   const amenities = room.amenities || [];
   const hasPhotos = room.photos && room.photos.length > 0;
   const photos = hasPhotos
@@ -220,6 +223,19 @@ export default function RoomDetailScreen() {
     setTimeout(() => {
       lightboxScrollRef.current?.scrollTo({ x: index * SCREEN_WIDTH, animated: false });
     }, 50);
+  };
+
+  const handleDeleteLactario = async () => {
+    setDeleting(true);
+    try {
+      await deleteLactario(room.id);
+      setDeleteModalVisible(false);
+      navigation.goBack();
+    } catch (error: any) {
+      Alert.alert('Error', error?.response?.data?.error || 'No se pudo eliminar.');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const formatDate = (dateStr: string) => {
@@ -282,15 +298,26 @@ export default function RoomDetailScreen() {
           >
             <ArrowLeft size={24} color={colors.white} />
           </TouchableOpacity>
-          {canEdit && (
-            <TouchableOpacity
-              style={[styles.editButton, { top: insets.top + spacing.sm }]}
-              onPress={() => navigation.navigate('EditRoom', { room })}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Pencil size={20} color={colors.white} />
-            </TouchableOpacity>
-          )}
+          <View style={[styles.heroActionsRight, { top: insets.top + spacing.sm }]}>
+            {canEdit && (
+              <TouchableOpacity
+                style={styles.heroActionBtn}
+                onPress={() => navigation.navigate('EditRoom', { room })}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Pencil size={20} color={colors.white} />
+              </TouchableOpacity>
+            )}
+            {isAdmin && (
+              <TouchableOpacity
+                style={[styles.heroActionBtn, { backgroundColor: 'rgba(220,38,38,0.7)' }]}
+                onPress={() => setDeleteModalVisible(true)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Trash2 size={20} color={colors.white} />
+              </TouchableOpacity>
+            )}
+          </View>
           {photos.length > 1 && (
             <View style={styles.dotsContainer}>
               {photos.map((_, idx) => (
@@ -355,6 +382,41 @@ export default function RoomDetailScreen() {
             >
               <X size={22} color={colors.white} />
             </TouchableOpacity>
+          </View>
+        </Modal>
+
+        {/* Delete Confirmation Modal (ADMIN only) */}
+        <Modal visible={deleteModalVisible} transparent animationType="fade">
+          <View style={styles.deleteModalOverlay}>
+            <View style={styles.deleteModalCard}>
+              <View style={styles.deleteModalIconWrap}>
+                <Trash2 size={28} color={colors.error} />
+              </View>
+              <Text style={styles.deleteModalTitle}>Eliminar aportación</Text>
+              <Text style={styles.deleteModalMsg}>
+                ¿Estás seguro de eliminar "{room.name}"? Se borrarán también sus reseñas, fotos y datos asociados. Esta acción no se puede deshacer.
+              </Text>
+              <View style={styles.deleteModalActions}>
+                <TouchableOpacity
+                  style={styles.deleteModalCancel}
+                  onPress={() => setDeleteModalVisible(false)}
+                  disabled={deleting}
+                >
+                  <Text style={styles.deleteModalCancelText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.deleteModalConfirm}
+                  onPress={handleDeleteLactario}
+                  disabled={deleting}
+                >
+                  {deleting ? (
+                    <ActivityIndicator size="small" color={colors.white} />
+                  ) : (
+                    <Text style={styles.deleteModalConfirmText}>Eliminar</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </Modal>
 
@@ -757,15 +819,82 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  editButton: {
+  heroActionsRight: {
     position: 'absolute',
     right: spacing.lg,
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  heroActionBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  deleteModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  deleteModalCard: {
+    backgroundColor: colors.white,
+    borderRadius: radii.xl,
+    padding: spacing.xxl,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 360,
+  },
+  deleteModalIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.errorLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  deleteModalTitle: {
+    ...typography.h4,
+    color: colors.slate[800],
+    marginBottom: spacing.sm,
+  },
+  deleteModalMsg: {
+    ...typography.small,
+    color: colors.slate[500],
+    textAlign: 'center',
+    marginBottom: spacing.xl,
+    lineHeight: 20,
+  },
+  deleteModalActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    width: '100%',
+  },
+  deleteModalCancel: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: radii.md,
+    backgroundColor: colors.slate[100],
+    alignItems: 'center',
+  },
+  deleteModalCancelText: {
+    ...typography.bodyBold,
+    color: colors.slate[600],
+  },
+  deleteModalConfirm: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: radii.md,
+    backgroundColor: colors.error,
+    alignItems: 'center',
+  },
+  deleteModalConfirmText: {
+    ...typography.bodyBold,
+    color: colors.white,
   },
   placeTypeBadge: {
     flexDirection: 'row',

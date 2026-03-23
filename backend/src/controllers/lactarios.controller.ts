@@ -236,7 +236,15 @@ const remove = async (req: Request, res: Response) => {
     const lactario = await prisma.lactario.findUnique({ where: { id } });
     if (!lactario) return res.status(404).json({ error: 'Lactario not found' });
 
-    await prisma.lactario.delete({ where: { id } });
+    // Delete related records that don't have onDelete: Cascade in schema
+    await prisma.$transaction([
+      prisma.review.deleteMany({ where: { lactarioId: id } }),
+      prisma.photo.deleteMany({ where: { lactarioId: id } }),
+      prisma.maintenanceReport.deleteMany({ where: { lactarioId: id } }),
+      prisma.lactarioAmenity.deleteMany({ where: { lactarioId: id } }),
+      prisma.lactario.delete({ where: { id } }),
+    ]);
+
     res.json({ message: 'Lactario deleted' });
   } catch (error) {
     res.status(500).json({ error: 'Error deleting lactario' });

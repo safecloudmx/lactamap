@@ -264,6 +264,11 @@ export const updateLactario = async (id: string, data: {
   return response.data;
 };
 
+export const deleteLactario = async (id: string) => {
+  const response = await api.delete(`/lactarios/${id}`);
+  return response.data;
+};
+
 // === Edit Proposals ===
 
 export const createEditProposal = async (data: {

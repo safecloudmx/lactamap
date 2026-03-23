@@ -320,7 +320,7 @@ export default function AddRoomScreen() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <View style={styles.modalIconRow}><AlertTriangle size={28} color={colors.warning} /></View>
-            <Text style={styles.modalTitle}>Declaración de consentimiento</Text>
+            <Text style={styles.modalTitle}>Declaración de Consentimiento</Text>
             <View style={styles.bulletList}>
               <Text style={styles.bullet}>• Las imágenes <Text style={styles.bold}>no contienen personas</Text>, rostros ni datos personales.</Text>
               <Text style={styles.bullet}>• Las fotos muestran únicamente el espacio físico.</Text>

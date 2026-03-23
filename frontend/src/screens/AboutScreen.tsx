@@ -27,9 +27,15 @@ export default function AboutScreen() {
 
         {/* Mission */}
         <Text style={styles.mission}>
-          Nuestra mision es facilitar la vida de madres y familias ayudandolas a
-          encontrar espacios seguros, comodos y dignos para la lactancia y el
-          cuidado de sus bebes, en cualquier lugar.
+          Nuestra misión es facilitar la vida de madres y familias ayudándolas a
+          encontrar espacios seguros, cómodos y dignos para la lactancia y el
+          cuidado de sus bebés, en cualquier lugar.
+        </Text>
+
+        {/* Credits */}
+        <Text style={styles.credits}>
+          Proyecto creado y dirigido por María Rodríguez.{'\n'}
+          Desarrollo por Eduardo Mosqueda.
         </Text>
 
         {/* Love message */}
@@ -41,7 +47,7 @@ export default function AboutScreen() {
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Developed by WARI</Text>
+          <Text style={styles.footerText}>WARI</Text>
         </View>
       </View>
     </View>
@@ -84,6 +90,13 @@ const styles = StyleSheet.create({
     color: colors.slate[600],
     textAlign: 'center',
     lineHeight: 26,
+    marginBottom: spacing.xl,
+  },
+  credits: {
+    ...typography.small,
+    color: colors.slate[500],
+    textAlign: 'center',
+    lineHeight: 22,
     marginBottom: spacing.xxl,
   },
   loveRow: {

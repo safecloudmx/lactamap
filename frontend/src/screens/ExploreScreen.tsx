@@ -1,21 +1,32 @@
 import React, { useState, useCallback } from 'react';
-import { View, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { DrawerActions } from '@react-navigation/native';
-import { SearchX } from 'lucide-react-native';
+import {
+  View, Text, FlatList, StyleSheet, ActivityIndicator,
+  TouchableOpacity, Image,
+} from 'react-native';
+import { useFocusEffect, useNavigation, DrawerActions } from '@react-navigation/native';
+import { SearchX, LayoutGrid, List, MapPin, Star, BadgeCheck } from 'lucide-react-native';
 import { GenderAccess, Lactario } from '../types';
 import { getLactarios } from '../services/api';
 import LactarioCard from '../components/LactarioCard';
-import { AppHeader, SearchBar, Chip, EmptyState } from '../components/ui';
-import { colors, spacing } from '../theme';
+import { AppHeader, SearchBar, Chip, EmptyState, PlaceholderImage } from '../components/ui';
+import { colors, spacing, typography, radii, shadows } from '../theme';
 
-const FILTER_OPTIONS = [
+const PLACE_TYPE_FILTERS = [
   { key: 'all', label: 'Todos' },
-  { key: GenderAccess.WOMEN, label: GenderAccess.WOMEN },
-  { key: GenderAccess.MEN, label: GenderAccess.MEN },
-  { key: GenderAccess.NEUTRAL, label: GenderAccess.NEUTRAL },
-  { key: 'verified', label: 'Verificado' },
+  { key: 'LACTARIO', label: '🤱 Lactarios' },
+  { key: 'CAMBIADOR', label: '🚼 Cambiadores' },
+  { key: 'BANO_FAMILIAR', label: '🚻 Baños' },
+  { key: 'PUNTO_INTERES', label: '⭐ Interés' },
 ];
+
+const EXTRA_FILTERS = [
+  { key: 'verified', label: '✓ Verificados' },
+  { key: GenderAccess.WOMEN, label: 'Mujeres' },
+  { key: GenderAccess.MEN, label: 'Hombres' },
+  { key: GenderAccess.NEUTRAL, label: 'Unisex' },
+];
+
+type ViewMode = 'card' | 'list';
 
 export default function ExploreScreen() {
   const navigation = useNavigation<any>();
@@ -24,7 +35,9 @@ export default function ExploreScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState('all');
+  const [activeTypeFilter, setActiveTypeFilter] = useState('all');
+  const [activeExtraFilter, setActiveExtraFilter] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('card');
 
   const fetchLactarios = useCallback(async () => {
     try {
@@ -51,21 +64,26 @@ export default function ExploreScreen() {
   };
 
   const filteredLactarios = lactarios.filter((item) => {
-    // Search filter
     const matchesSearch =
       searchQuery.length === 0 ||
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.address && item.address.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    // Category filter
-    let matchesFilter = true;
-    if (activeFilter === 'verified') {
-      matchesFilter = !!item.isVerified;
-    } else if (activeFilter !== 'all') {
-      matchesFilter = item.access === activeFilter;
+    // Place type filter
+    let matchesType = true;
+    if (activeTypeFilter !== 'all') {
+      matchesType = (item.placeType || 'LACTARIO') === activeTypeFilter;
     }
 
-    return matchesSearch && matchesFilter;
+    // Extra filter
+    let matchesExtra = true;
+    if (activeExtraFilter === 'verified') {
+      matchesExtra = !!item.isVerified;
+    } else if (activeExtraFilter) {
+      matchesExtra = item.access === activeExtraFilter;
+    }
+
+    return matchesSearch && matchesType && matchesExtra;
   });
 
   const handleOpenDrawer = () => {
@@ -76,34 +94,128 @@ export default function ExploreScreen() {
     navigation.navigate('RoomDetail', { room });
   };
 
-  const renderItem = ({ item }: { item: Lactario }) => (
+  const handleExtraFilter = (key: string) => {
+    setActiveExtraFilter((prev) => (prev === key ? null : key));
+  };
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setActiveTypeFilter('all');
+    setActiveExtraFilter(null);
+  };
+
+  const renderCardItem = ({ item }: { item: Lactario }) => (
     <LactarioCard lactario={item} onPress={() => handleCardPress(item)} />
+  );
+
+  const renderListItem = ({ item }: { item: Lactario }) => (
+    <TouchableOpacity
+      style={styles.listItem}
+      onPress={() => handleCardPress(item)}
+      activeOpacity={0.7}
+    >
+      {item.imageUrl ? (
+        <Image source={{ uri: item.imageUrl }} style={styles.listThumb} />
+      ) : (
+        <PlaceholderImage style={styles.listThumb} message="" />
+      )}
+      <View style={styles.listInfo}>
+        <Text style={styles.listName} numberOfLines={1}>{item.name}</Text>
+        {item.address ? (
+          <View style={styles.listAddrRow}>
+            <MapPin size={12} color={colors.slate[400]} />
+            <Text style={styles.listAddr} numberOfLines={1}>{item.address}</Text>
+          </View>
+        ) : null}
+        <View style={styles.listBottomRow}>
+          {item.rating > 0 && (
+            <View style={styles.listRatingRow}>
+              <Star size={12} color={colors.warning} fill={colors.warning} />
+              <Text style={styles.listRating}>{item.rating.toFixed(1)}</Text>
+            </View>
+          )}
+          {item.isVerified && (
+            <View style={styles.listVerified}>
+              <BadgeCheck size={12} color={colors.success} />
+              <Text style={styles.listVerifiedText}>Verificado</Text>
+            </View>
+          )}
+        </View>
+      </View>
+    </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
-      <AppHeader title="Explorar" onMenuPress={handleOpenDrawer} />
+      <AppHeader
+        title="Explorar"
+        onMenuPress={handleOpenDrawer}
+        rightAction={
+          <View style={styles.viewToggle}>
+            <TouchableOpacity
+              style={[styles.viewBtn, viewMode === 'card' && styles.viewBtnActive]}
+              onPress={() => setViewMode('card')}
+            >
+              <LayoutGrid size={18} color={viewMode === 'card' ? colors.primary[500] : colors.slate[400]} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.viewBtn, viewMode === 'list' && styles.viewBtnActive]}
+              onPress={() => setViewMode('list')}
+            >
+              <List size={18} color={viewMode === 'list' ? colors.primary[500] : colors.slate[400]} />
+            </TouchableOpacity>
+          </View>
+        }
+      />
 
       <View style={styles.searchWrapper}>
-        <SearchBar onSearch={setSearchQuery} placeholder="Buscar por nombre o direccion..." />
+        <SearchBar onSearch={setSearchQuery} placeholder="Buscar por nombre o dirección..." />
       </View>
 
+      {/* Place type filters */}
       <View style={styles.filtersWrapper}>
         <FlatList
           horizontal
           showsHorizontalScrollIndicator={false}
-          data={FILTER_OPTIONS}
+          data={PLACE_TYPE_FILTERS}
           keyExtractor={(item) => item.key}
           contentContainerStyle={styles.filtersContent}
           renderItem={({ item }) => (
             <Chip
               label={item.label}
-              selected={activeFilter === item.key}
-              onPress={() => setActiveFilter(item.key)}
+              selected={activeTypeFilter === item.key}
+              onPress={() => setActiveTypeFilter(item.key)}
             />
           )}
         />
       </View>
+
+      {/* Extra filters */}
+      <View style={styles.filtersWrapper}>
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={EXTRA_FILTERS}
+          keyExtractor={(item) => item.key}
+          contentContainerStyle={styles.filtersContent}
+          renderItem={({ item }) => (
+            <Chip
+              label={item.label}
+              selected={activeExtraFilter === item.key}
+              onPress={() => handleExtraFilter(item.key)}
+            />
+          )}
+        />
+      </View>
+
+      {/* Results count */}
+      {!loading && (
+        <View style={styles.resultsBar}>
+          <Text style={styles.resultsText}>
+            {filteredLactarios.length} ubicación{filteredLactarios.length !== 1 ? 'es' : ''}
+          </Text>
+        </View>
+      )}
 
       {loading ? (
         <View style={styles.loaderContainer}>
@@ -113,7 +225,7 @@ export default function ExploreScreen() {
         <FlatList
           data={filteredLactarios}
           keyExtractor={(item) => item.id}
-          renderItem={renderItem}
+          renderItem={viewMode === 'card' ? renderCardItem : renderListItem}
           contentContainerStyle={[
             styles.listContent,
             filteredLactarios.length === 0 && styles.emptyList,
@@ -124,12 +236,9 @@ export default function ExploreScreen() {
             <EmptyState
               icon={<SearchX size={32} color={colors.primary[500]} />}
               title="Sin resultados"
-              subtitle="No se encontraron lactarios con los filtros seleccionados."
+              subtitle="No se encontraron ubicaciones con los filtros seleccionados."
               actionLabel="Limpiar filtros"
-              onAction={() => {
-                setSearchQuery('');
-                setActiveFilter('all');
-              }}
+              onAction={clearFilters}
             />
           }
         />
@@ -149,11 +258,19 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   filtersWrapper: {
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.xs,
   },
   filtersContent: {
     paddingHorizontal: spacing.lg,
     gap: spacing.sm,
+  },
+  resultsBar: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  resultsText: {
+    ...typography.caption,
+    color: colors.slate[400],
   },
   listContent: {
     paddingHorizontal: spacing.lg,
@@ -167,5 +284,77 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    backgroundColor: colors.slate[100],
+    borderRadius: radii.md,
+    padding: 2,
+  },
+  viewBtn: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radii.sm,
+  },
+  viewBtnActive: {
+    backgroundColor: colors.white,
+    ...shadows.sm,
+  },
+  // List view styles
+  listItem: {
+    flexDirection: 'row',
+    backgroundColor: colors.white,
+    borderRadius: radii.md,
+    marginBottom: spacing.sm,
+    overflow: 'hidden',
+    ...shadows.sm,
+  },
+  listThumb: {
+    width: 80,
+    height: 80,
+  },
+  listInfo: {
+    flex: 1,
+    padding: spacing.sm,
+    justifyContent: 'center',
+    gap: 3,
+  },
+  listName: {
+    ...typography.bodyBold,
+    color: colors.slate[800],
+  },
+  listAddrRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  listAddr: {
+    ...typography.caption,
+    color: colors.slate[500],
+    flex: 1,
+  },
+  listBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: 2,
+  },
+  listRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  listRating: {
+    ...typography.captionBold,
+    color: colors.slate[600],
+  },
+  listVerified: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  listVerifiedText: {
+    ...typography.caption,
+    color: colors.success,
   },
 });

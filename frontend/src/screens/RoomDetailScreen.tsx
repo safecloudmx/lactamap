@@ -43,9 +43,11 @@ import {
   UserCircle,
   EyeOff,
   X,
+  ShieldCheck,
+  ShieldOff,
 } from 'lucide-react-native';
 import { Lactario, Review } from '../types';
-import { getLactarioById, getReviews, createReview, updateReview, deleteReview, reportReview, deleteLactario } from '../services/api';
+import { getLactarioById, getReviews, createReview, updateReview, deleteReview, reportReview, deleteLactario, verifyLactario, unverifyLactario } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Rating, Card, AvatarInitials, PlaceholderImage } from '../components/ui';
 import { colors, spacing, typography, radii, shadows } from '../theme';
@@ -92,6 +94,7 @@ export default function RoomDetailScreen() {
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
   const fetchDetails = useCallback(async () => {
     try {
@@ -223,6 +226,23 @@ export default function RoomDetailScreen() {
     setTimeout(() => {
       lightboxScrollRef.current?.scrollTo({ x: index * SCREEN_WIDTH, animated: false });
     }, 50);
+  };
+
+  const handleToggleVerify = async () => {
+    setVerifying(true);
+    try {
+      if (room.isVerified) {
+        await unverifyLactario(room.id);
+        setRoom((prev) => ({ ...prev, isVerified: false }));
+      } else {
+        await verifyLactario(room.id);
+        setRoom((prev) => ({ ...prev, isVerified: true }));
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error?.response?.data?.error || 'No se pudo cambiar la verificación.');
+    } finally {
+      setVerifying(false);
+    }
   };
 
   const handleDeleteLactario = async () => {
@@ -452,6 +472,28 @@ export default function RoomDetailScreen() {
                 <BadgeCheck size={14} color={colors.success} />
                 <Text style={styles.verifiedText}>Verificado</Text>
               </View>
+            )}
+            {isReviewer && (
+              <TouchableOpacity
+                style={[styles.verifyBtn, room.isVerified && styles.verifyBtnActive]}
+                onPress={handleToggleVerify}
+                disabled={verifying}
+                activeOpacity={0.7}
+              >
+                {verifying ? (
+                  <ActivityIndicator size="small" color={room.isVerified ? colors.success : colors.slate[500]} />
+                ) : room.isVerified ? (
+                  <>
+                    <ShieldOff size={14} color={colors.success} />
+                    <Text style={[styles.verifyBtnText, { color: colors.success }]}>Quitar verificación</Text>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck size={14} color={colors.slate[500]} />
+                    <Text style={styles.verifyBtnText}>Verificar</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             )}
           </View>
 
@@ -1002,6 +1044,24 @@ const styles = StyleSheet.create({
   verifiedText: {
     ...typography.captionBold,
     color: colors.success,
+  },
+  verifyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderColor: colors.slate[300],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.full,
+  },
+  verifyBtnActive: {
+    borderColor: colors.success,
+    backgroundColor: colors.successLight,
+  },
+  verifyBtnText: {
+    ...typography.caption,
+    color: colors.slate[500],
   },
   section: {
     gap: spacing.md,

@@ -54,6 +54,7 @@ const getAll = async (req: Request, res: Response) => {
       ...l,
       rating: Number(l.avgRating),
       reviewCount: l._count.reviews,
+      isVerified: l.verifiedType !== 'NONE',
       imageUrl: await signUrl(l.photos[0]?.url ?? null),
       photos: l.photos.map((p) => ({ id: p.id, url: p.url })),
     })));
@@ -100,6 +101,7 @@ const getById = async (req: Request, res: Response) => {
     res.json({
       ...lactario,
       rating: Number(lactario.avgRating),
+      isVerified: lactario.verifiedType !== 'NONE',
       imageUrl: signedPhotos[0]?.url ?? null,
       photos: signedPhotos,
       reviews: signedReviews,
@@ -251,4 +253,58 @@ const remove = async (req: Request, res: Response) => {
   }
 };
 
-export default { getAll, getById, create, update, remove };
+const verify = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userRole = (req as any).user?.role;
+
+    if (!['ADMIN', 'ELITE'].includes(userRole)) {
+      return res.status(403).json({ error: 'Solo Admin o Elite pueden verificar ubicaciones' });
+    }
+
+    const lactario = await prisma.lactario.findUnique({ where: { id } });
+    if (!lactario) return res.status(404).json({ error: 'Lactario not found' });
+
+    const updated = await prisma.lactario.update({
+      where: { id },
+      data: {
+        verifiedType: 'ELITE',
+        verificationCount: { increment: 1 },
+      },
+    });
+
+    res.json({ message: 'Ubicación verificada', lactario: updated });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al verificar ubicación' });
+  }
+};
+
+const unverify = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userRole = (req as any).user?.role;
+
+    if (!['ADMIN', 'ELITE'].includes(userRole)) {
+      return res.status(403).json({ error: 'Solo Admin o Elite pueden modificar verificaciones' });
+    }
+
+    const lactario = await prisma.lactario.findUnique({ where: { id } });
+    if (!lactario) return res.status(404).json({ error: 'Lactario not found' });
+
+    const updated = await prisma.lactario.update({
+      where: { id },
+      data: {
+        verifiedType: 'NONE',
+        verificationCount: 0,
+      },
+    });
+
+    res.json({ message: 'Verificación removida', lactario: updated });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al remover verificación' });
+  }
+};
+
+export default { getAll, getById, create, update, remove, verify, unverify };

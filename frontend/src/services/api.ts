@@ -269,6 +269,16 @@ export const deleteLactario = async (id: string) => {
   return response.data;
 };
 
+export const verifyLactario = async (id: string) => {
+  const response = await api.put(`/lactarios/${id}/verify`);
+  return response.data;
+};
+
+export const unverifyLactario = async (id: string) => {
+  const response = await api.put(`/lactarios/${id}/unverify`);
+  return response.data;
+};
+
 // === Edit Proposals ===
 
 export const createEditProposal = async (data: {

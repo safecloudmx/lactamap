@@ -47,7 +47,7 @@ import {
 import { Lactario, Review } from '../types';
 import { getLactarioById, getReviews, createReview, updateReview, deleteReview, reportReview } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Rating, Card, AvatarInitials } from '../components/ui';
+import { Rating, Card, AvatarInitials, PlaceholderImage } from '../components/ui';
 import { colors, spacing, typography, radii, shadows } from '../theme';
 
 const AMENITY_ICONS: Record<string, React.ComponentType<any>> = {
@@ -209,9 +209,10 @@ export default function RoomDetailScreen() {
       (room.owner?.id !== undefined && room.owner.id === user?.id)
     );
   const amenities = room.amenities || [];
-  const photos = (room.photos && room.photos.length > 0)
+  const hasPhotos = room.photos && room.photos.length > 0;
+  const photos = hasPhotos
     ? room.photos
-    : [{ id: 'placeholder', url: `https://picsum.photos/seed/${room.id}/800/500` }];
+    : [{ id: 'placeholder', url: '' }];
 
   const openLightbox = (index: number) => {
     setLightboxIndex(index);
@@ -255,14 +256,18 @@ export default function RoomDetailScreen() {
               <TouchableOpacity
                 key={photo.id}
                 activeOpacity={0.92}
-                onPress={() => openLightbox(idx)}
+                onPress={() => photo.url ? openLightbox(idx) : undefined}
                 style={styles.photoSlide}
               >
-                <Image
-                  source={{ uri: photo.url }}
-                  style={styles.heroImage}
-                  resizeMode="cover"
-                />
+                {photo.url ? (
+                  <Image
+                    source={{ uri: photo.url }}
+                    style={styles.heroImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <PlaceholderImage style={styles.heroImage} />
+                )}
               </TouchableOpacity>
             ))}
           </ScrollView>

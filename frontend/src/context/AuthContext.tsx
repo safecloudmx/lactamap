@@ -25,8 +25,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const storedToken = await AsyncStorage.getItem('@Auth:token');
 
       if (storedUser && storedToken) {
-        setUser(JSON.parse(storedUser));
+        const cached = JSON.parse(storedUser);
+        setUser(cached);
         api.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+
+        // Refresh profile from server to pick up role/points changes
+        if (!cached.isGuest) {
+          try {
+            const { data: fresh } = await api.get('/users/profile');
+            const merged = { ...cached, ...fresh };
+            setUser(merged);
+            await AsyncStorage.setItem('@Auth:user', JSON.stringify(merged));
+          } catch (_) {
+            // offline / expired — keep cached data
+          }
+        }
       }
       setLoading(false);
     }

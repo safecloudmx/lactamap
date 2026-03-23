@@ -57,7 +57,14 @@ export default function ProfileScreen() {
 
   const displayUser = profileData || user;
   const userName = displayUser?.name || displayUser?.email?.split('@')[0] || 'Usuario';
-  const level = displayUser?.level || Math.floor(Math.sqrt((displayUser?.points || 0) / 100)) + 1;
+  const ROLE_LABELS: Record<string, string> = {
+    ADMIN: 'Admin',
+    ELITE: 'Elite',
+    DISTINGUISHED: 'Distinguido',
+    CONTRIBUTOR: 'Contribuidor',
+    VISITOR: 'Visitante',
+  };
+  const roleLabel = ROLE_LABELS[displayUser?.role ?? ''] || displayUser?.role || 'Visitante';
 
   const stats = [
     { icon: TrendingUp, label: 'Puntos', value: displayUser?.points || 0, color: colors.primary[500] },
@@ -173,7 +180,7 @@ export default function ProfileScreen() {
           <Text style={styles.userEmail}>{displayUser?.email}</Text>
           <View style={styles.levelBadge}>
             <Award size={14} color={colors.warning} />
-            <Text style={styles.levelText}>Nivel {level}</Text>
+            <Text style={styles.levelText}>{roleLabel}</Text>
           </View>
         </View>
       </View>

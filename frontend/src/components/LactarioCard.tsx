@@ -4,7 +4,7 @@ import { MapPin } from 'lucide-react-native';
 import { Lactario } from '../types';
 import { AMENITY_LABELS } from '../constants';
 import { colors, spacing, typography, radii } from '../theme';
-import { Card, Rating, StatusBadge } from './ui';
+import { Card, Rating, StatusBadge, PlaceholderImage } from './ui';
 
 interface LactarioCardProps {
   lactario: Lactario;
@@ -18,10 +18,14 @@ export default function LactarioCard({ lactario, onPress, showStatus }: Lactario
   return (
     <Card onPress={onPress} style={styles.card}>
       <View style={styles.imageContainer}>
-        <Image
-          source={{ uri: lactario.imageUrl || `https://picsum.photos/seed/${lactario.id}/400/200` }}
-          style={styles.image}
-        />
+        {lactario.imageUrl ? (
+          <Image
+            source={{ uri: lactario.imageUrl }}
+            style={styles.image}
+          />
+        ) : (
+          <PlaceholderImage style={styles.image} />
+        )}
         {showStatus && (
           <View style={styles.statusOverlay}>
             <StatusBadge status={lactario.status} />

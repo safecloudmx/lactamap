@@ -62,7 +62,7 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
           `'<div style="padding:10px 12px 4px">'+` +
           `'<span style="font-size:11px;background:${badgeBg};color:${badgeColor};padding:2px 8px;border-radius:99px;font-weight:700">${badgeLabel}</span>'+` +
           `'<div style="font-weight:700;margin-top:5px;font-size:14px">${l.name.replace(/'/g, "\\'").replace(/"/g, '&quot;')}</div>'+` +
-          `'<div style="color:#64748b;font-size:12px;margin-top:2px;margin-bottom:6px">${(l.address || '').replace(/'/g, "\\'").replace(/"/g, '&quot;')}</div>'+` +
+          `'<div style="color:#64748b;font-size:12px;margin-top:2px;margin-bottom:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${(l.description || '').replace(/'/g, "\\'").replace(/"/g, '&quot;')}</div>'+` +
           `'</div>'+` +
           `'</div>';` +
           `L.marker([${l.latitude},${l.longitude}],{icon:icon}).addTo(map)` +

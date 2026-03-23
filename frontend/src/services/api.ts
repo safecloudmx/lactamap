@@ -37,6 +37,16 @@ const mapAmenityObjectToArray = (amenities: any): string[] => {
   return result;
 };
 
+export const verifyEmail = async (email: string, otp: string) => {
+  const response = await api.post('/auth/verify-email', { email, otp });
+  return response.data;
+};
+
+export const resendVerification = async (email: string) => {
+  const response = await api.post('/auth/resend-verification', { email });
+  return response.data;
+};
+
 export const getLactarios = async (filters?: { status?: string; verified?: boolean; search?: string; mine?: boolean }) => {
   const response = await api.get('/lactarios', { params: filters });
   return response.data.map((l: any) => ({

@@ -3,12 +3,14 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import prisma from '../lib/prisma';
+import { sendVerificationEmail, sendPasswordResetEmail } from '../services/email.service';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
 const RESET_TOKEN_EXPIRY_HOURS = 1;
+const VERIFY_OTP_EXPIRY_MINUTES = 15;
 
 function buildUserPayload(user: any) {
   return {
@@ -38,26 +40,122 @@ const register = async (req: Request, res: Response) => {
 
     const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
     if (existing) {
+      // If unverified account exists, resend OTP instead of rejecting
+      if (!(existing as any).emailVerified) {
+        const otp = crypto.randomInt(100000, 999999).toString();
+        const hashedOtp = await bcrypt.hash(otp, 8);
+        const expiry = new Date(Date.now() + VERIFY_OTP_EXPIRY_MINUTES * 60 * 1000);
+        await prisma.user.update({
+          where: { id: existing.id },
+          data: { emailVerifyOtp: hashedOtp, emailVerifyExpiry: expiry } as any,
+        });
+        await sendVerificationEmail(existing.email, existing.name || '', otp).catch(console.error);
+        return res.status(200).json({ requiresVerification: true, email: existing.email });
+      }
       return res.status(409).json({ error: 'Este correo ya está registrado', code: 'EMAIL_TAKEN' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({
+    const otp = crypto.randomInt(100000, 999999).toString();
+    const hashedOtp = await bcrypt.hash(otp, 8);
+    const expiry = new Date(Date.now() + VERIFY_OTP_EXPIRY_MINUTES * 60 * 1000);
+
+    await prisma.user.create({
       data: {
         email: email.toLowerCase().trim(),
         name: name?.trim() || null,
         passwordHash: hashedPassword,
         role: 'VISITOR',
         status: 'ACTIVE',
+        emailVerified: false,
+        emailVerifyOtp: hashedOtp,
+        emailVerifyExpiry: expiry,
         lastLogin: new Date(),
-      },
+      } as any,
     });
 
-    const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-    res.status(201).json({ token, user: buildUserPayload(user) });
+    await sendVerificationEmail(email.toLowerCase().trim(), name?.trim() || '', otp).catch(console.error);
+
+    res.status(201).json({ requiresVerification: true, email: email.toLowerCase().trim() });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al crear la cuenta', code: 'SERVER_ERROR' });
+  }
+};
+
+const verifyEmail = async (req: Request, res: Response) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({ error: 'Correo y código son requeridos', code: 'MISSING_FIELDS' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+
+    if (!user) {
+      return res.status(404).json({ error: 'Cuenta no encontrada', code: 'USER_NOT_FOUND' });
+    }
+    const u = user as any;
+    if (u.emailVerified) {
+      // Already verified — just log them in
+      const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+      return res.json({ token, user: buildUserPayload(user) });
+    }
+    if (!u.emailVerifyOtp || !u.emailVerifyExpiry) {
+      return res.status(400).json({ error: 'No hay verificación pendiente', code: 'NO_PENDING_VERIFICATION' });
+    }
+    if (u.emailVerifyExpiry < new Date()) {
+      return res.status(400).json({ error: 'El código expiró. Solicita uno nuevo.', code: 'OTP_EXPIRED' });
+    }
+
+    const validOtp = await bcrypt.compare(otp.trim(), u.emailVerifyOtp);
+    if (!validOtp) {
+      return res.status(400).json({ error: 'Código incorrecto', code: 'INVALID_OTP' });
+    }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerified: true, emailVerifyOtp: null, emailVerifyExpiry: null } as any,
+    });
+
+    const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, user: buildUserPayload(user) });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al verificar', code: 'SERVER_ERROR' });
+  }
+};
+
+const resendVerification = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'El correo es requerido', code: 'MISSING_FIELDS' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+
+    if (!user || (user as any).emailVerified) {
+      return res.json({ message: 'Si el correo tiene verificación pendiente recibirás un nuevo código.' });
+    }
+
+    const otp = crypto.randomInt(100000, 999999).toString();
+    const hashedOtp = await bcrypt.hash(otp, 8);
+    const expiry = new Date(Date.now() + VERIFY_OTP_EXPIRY_MINUTES * 60 * 1000);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerifyOtp: hashedOtp, emailVerifyExpiry: expiry } as any,
+    });
+
+    await sendVerificationEmail(user.email, user.name || '', otp).catch(console.error);
+
+    res.json({ message: 'Código reenviado.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al reenviar el código', code: 'SERVER_ERROR' });
   }
 };
 
@@ -82,7 +180,6 @@ const login = async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Esta cuenta está suspendida. Contacta a soporte.', code: 'ACCOUNT_SUSPENDED' });
     }
 
-    // Check temporary lockout
     if (user.lockedUntil && user.lockedUntil > new Date()) {
       const minutesLeft = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60000);
       return res.status(429).json({
@@ -117,7 +214,24 @@ const login = async (req: Request, res: Response) => {
       });
     }
 
-    // Success — reset counters
+    // Check email verification
+    if (!(user as any).emailVerified) {
+      // Resend OTP automatically
+      const otp = crypto.randomInt(100000, 999999).toString();
+      const hashedOtp = await bcrypt.hash(otp, 8);
+      const expiry = new Date(Date.now() + VERIFY_OTP_EXPIRY_MINUTES * 60 * 1000);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerifyOtp: hashedOtp, emailVerifyExpiry: expiry } as any,
+      });
+      await sendVerificationEmail(user.email, user.name || '', otp).catch(console.error);
+      return res.status(403).json({
+        error: 'Debes verificar tu correo antes de iniciar sesión.',
+        code: 'EMAIL_NOT_VERIFIED',
+        email: user.email,
+      });
+    }
+
     await prisma.user.update({
       where: { id: user.id },
       data: { failedLoginAttempts: 0, lockedUntil: null, lastLogin: new Date() },
@@ -141,7 +255,6 @@ const forgotPassword = async (req: Request, res: Response) => {
 
     const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
 
-    // Always success to prevent email enumeration
     if (!user || user.status === 'BANNED') {
       return res.json({ message: 'Si el correo está registrado recibirás el código.' });
     }
@@ -155,12 +268,7 @@ const forgotPassword = async (req: Request, res: Response) => {
       data: { passwordResetToken: hashedOtp, passwordResetExpiry: expiry },
     });
 
-    const smtpConfigured = !!(process.env.SMTP_HOST && process.env.SMTP_USER);
-    if (smtpConfigured) {
-      await sendResetEmail(user.email, otp);
-    } else {
-      console.log(`[DEV] OTP para ${user.email}: ${otp}`);
-    }
+    await sendPasswordResetEmail(user.email, otp).catch(console.error);
 
     res.json({ message: 'Si el correo está registrado recibirás el código.' });
   } catch (error) {
@@ -213,32 +321,4 @@ const resetPassword = async (req: Request, res: Response) => {
   }
 };
 
-async function sendResetEmail(email: string, otp: string) {
-  try {
-    const nodemailer = await import('nodemailer');
-    const transporter = nodemailer.default.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    });
-    await transporter.sendMail({
-      from: `"LactaMap" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
-      to: email,
-      subject: 'Código para restablecer tu contraseña — LactaMap',
-      html: `
-        <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
-          <h2 style="color:#F43F5E">LactaMap</h2>
-          <p>Solicitaste restablecer tu contraseña.</p>
-          <p>Tu código de verificación es:</p>
-          <div style="font-size:36px;font-weight:bold;letter-spacing:10px;color:#F43F5E;padding:20px 0">${otp}</div>
-          <p style="color:#666">Expira en ${RESET_TOKEN_EXPIRY_HOURS} hora. Si no solicitaste esto, ignora este mensaje.</p>
-        </div>
-      `,
-    });
-  } catch (err) {
-    console.error('Error sending reset email:', err);
-  }
-}
-
-export default { register, login, forgotPassword, resetPassword };
+export default { register, login, verifyEmail, resendVerification, forgotPassword, resetPassword };

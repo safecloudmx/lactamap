@@ -1,19 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Modal,
-  TouchableWithoutFeedback,
+  Animated, Easing, KeyboardAvoidingView, Platform, ScrollView, Modal,
+  TouchableWithoutFeedback, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import {
   Baby, Mail, Lock, User as UserIcon, Eye, EyeOff,
-  AlertCircle, CheckCircle, X, ArrowLeft, KeyRound,
+  AlertCircle, CheckCircle, X, ArrowLeft, KeyRound, ShieldCheck,
 } from 'lucide-react-native';
 import { colors, typography, spacing, radii, shadows } from '../theme';
 import api from '../services/api';
+import { verifyEmail, resendVerification } from '../services/api';
 
-type AuthMode = 'login' | 'register';
+type AuthMode = 'login' | 'register' | 'verify';
 type ResetStep = 'email' | 'otp' | 'newPassword';
 
 interface FieldErrors {
@@ -24,7 +25,7 @@ interface FieldErrors {
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
-  const { signIn, register, guestLogin } = useAuth();
+  const { signIn, register, completeAuth, guestLogin } = useAuth();
 
   // Main auth state
   const [mode, setMode] = useState<AuthMode>('login');
@@ -35,6 +36,13 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [globalError, setGlobalError] = useState('');
+
+  // Email verification state
+  const [verifyEmail2, setVerifyEmail2] = useState('');
+  const [verifyOtp, setVerifyOtp] = useState('');
+  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [verifyError, setVerifyError] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   // Password reset state
   const [showReset, setShowReset] = useState(false);
@@ -81,9 +89,29 @@ export default function LoginScreen() {
         await register(email.trim(), password, name.trim());
       }
     } catch (error: any) {
+      // Registration requires email verification
+      if (error.code === 'REQUIRES_VERIFICATION') {
+        setVerifyEmail2(error.email);
+        setVerifyOtp('');
+        setVerifyError('');
+        startResendCooldown();
+        setMode('verify');
+        return;
+      }
+
       const data = error.response?.data;
       const code = data?.code;
       const msg = data?.error || 'Error de autenticación';
+
+      // Login blocked — redirect to verify screen
+      if (code === 'EMAIL_NOT_VERIFIED') {
+        setVerifyEmail2(data.email || email.trim());
+        setVerifyOtp('');
+        setVerifyError('');
+        startResendCooldown();
+        setMode('verify');
+        return;
+      }
 
       if (code === 'USER_NOT_FOUND') {
         setFieldErrors({ email: 'No existe una cuenta con este correo' });
@@ -108,6 +136,51 @@ export default function LoginScreen() {
     setFieldErrors({});
     setGlobalError('');
     setPassword('');
+  };
+
+  const startResendCooldown = () => {
+    setResendCooldown(60);
+    const interval = setInterval(() => {
+      setResendCooldown((c) => {
+        if (c <= 1) { clearInterval(interval); return 0; }
+        return c - 1;
+      });
+    }, 1000);
+  };
+
+  const handleVerifyOtpSubmit = async () => {
+    if (verifyOtp.trim().length !== 6) {
+      setVerifyError('El código debe tener 6 dígitos');
+      return;
+    }
+    setVerifyLoading(true);
+    setVerifyError('');
+    try {
+      const data = await verifyEmail(verifyEmail2, verifyOtp.trim());
+      await completeAuth(data.token, data.user);
+    } catch (e: any) {
+      const code = e.response?.data?.code;
+      if (code === 'OTP_EXPIRED') {
+        setVerifyError('El código expiró. Solicita uno nuevo.');
+      } else if (code === 'INVALID_OTP') {
+        setVerifyError('Código incorrecto. Revisa tu correo.');
+      } else {
+        setVerifyError(e.response?.data?.error || 'Error al verificar');
+      }
+    } finally {
+      setVerifyLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (resendCooldown > 0) return;
+    try {
+      await resendVerification(verifyEmail2);
+      startResendCooldown();
+      setVerifyError('');
+    } catch {
+      setVerifyError('No se pudo reenviar el código');
+    }
   };
 
   // --- Password Reset ---
@@ -187,6 +260,29 @@ export default function LoginScreen() {
     }
   };
 
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+
+  // Spinner animation
+  const spinValue = useRef(new Animated.Value(0)).current;
+  const spinAnim = useRef<Animated.CompositeAnimation | null>(null);
+  useEffect(() => {
+    if (loading) {
+      spinValue.setValue(0);
+      spinAnim.current = Animated.loop(
+        Animated.timing(spinValue, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
+      );
+      spinAnim.current.start();
+    } else {
+      spinAnim.current?.stop();
+    }
+  }, [loading]);
+  const spin = spinValue.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+
   // --- Render helpers ---
   const renderFieldError = (msg?: string) =>
     msg ? (
@@ -196,9 +292,10 @@ export default function LoginScreen() {
       </View>
     ) : null;
 
-  const inputStyle = (hasError?: boolean) => [
+  const inputStyle = (field: string, hasError?: boolean) => [
     styles.inputWrapper,
     hasError && styles.inputWrapperError,
+    focusedField === field && !hasError && styles.inputWrapperFocused,
   ];
 
   const stepsDone = { otp: ['email'], newPassword: ['email', 'otp'] } as Record<string, string[]>;
@@ -224,28 +321,99 @@ export default function LoginScreen() {
 
         {/* Card */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>
+
+          {/* ── Verify email mode ── */}
+          {mode === 'verify' ? (
+            <>
+              <View style={styles.verifyIconRow}>
+                <ShieldCheck size={36} color={colors.primary[500]} />
+              </View>
+              <Text style={styles.cardTitle}>Verifica tu correo</Text>
+              <Text style={styles.verifyDesc}>
+                Enviamos un código de 6 dígitos a{'\n'}
+                <Text style={styles.verifyEmail}>{verifyEmail2}</Text>
+              </Text>
+
+              <TextInput
+                style={[styles.otpInput, !!verifyError && { borderColor: colors.error }]}
+                placeholder="000000"
+                placeholderTextColor={colors.slate[300]}
+                value={verifyOtp}
+                onChangeText={(t) => { setVerifyOtp(t.replace(/\D/g, '').slice(0, 6)); setVerifyError(''); }}
+                keyboardType="number-pad"
+                maxLength={6}
+                autoFocus
+                onSubmitEditing={handleVerifyOtpSubmit}
+              />
+
+              {!!verifyError && (
+                <View style={styles.globalError}>
+                  <AlertCircle size={14} color={colors.error} />
+                  <Text style={styles.globalErrorText}>{verifyError}</Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={[styles.primaryBtn, verifyLoading && styles.primaryBtnLoading]}
+                onPress={handleVerifyOtpSubmit}
+                disabled={verifyLoading}
+                activeOpacity={0.85}
+              >
+                {verifyLoading ? (
+                  <View style={styles.loadingRow}>
+                    <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                      <View style={styles.spinnerRing} />
+                    </Animated.View>
+                    <Text style={styles.primaryBtnText}>Verificando...</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.primaryBtnText}>Verificar cuenta</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.resendBtn}
+                onPress={handleResendVerification}
+                disabled={resendCooldown > 0}
+              >
+                <Text style={[styles.resendBtnText, resendCooldown > 0 && { color: colors.slate[400] }]}>
+                  {resendCooldown > 0 ? `Reenviar en ${resendCooldown}s` : 'Reenviar código'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.backToLogin} onPress={() => setMode('login')}>
+                <ArrowLeft size={14} color={colors.slate[400]} />
+                <Text style={styles.backToLoginText}>Volver al inicio de sesión</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+
+          <><Text style={styles.cardTitle}>
             {mode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'}
           </Text>
 
           {mode === 'register' && (
             <>
-              <View style={inputStyle(!!fieldErrors.name)}>
-                <UserIcon size={18} color={fieldErrors.name ? colors.error : colors.slate[400]} />
+              <View style={inputStyle('name', !!fieldErrors.name)}>
+                <UserIcon size={18} color={fieldErrors.name ? colors.error : focusedField === 'name' ? colors.primary[500] : colors.slate[400]} />
                 <TextInput
                   style={styles.input}
                   placeholder="Tu nombre"
                   placeholderTextColor={colors.slate[400]}
                   value={name}
                   onChangeText={(t) => { setName(t); setFieldErrors((p) => ({ ...p, name: undefined })); }}
+                  onFocus={() => setFocusedField('name')}
+                  onBlur={() => setFocusedField(null)}
+                  returnKeyType="next"
+                  blurOnSubmit={false}
                 />
               </View>
               {renderFieldError(fieldErrors.name)}
             </>
           )}
 
-          <View style={inputStyle(!!fieldErrors.email)}>
-            <Mail size={18} color={fieldErrors.email ? colors.error : colors.slate[400]} />
+          <View style={inputStyle('email', !!fieldErrors.email)}>
+            <Mail size={18} color={fieldErrors.email ? colors.error : focusedField === 'email' ? colors.primary[500] : colors.slate[400]} />
             <TextInput
               style={styles.input}
               placeholder="correo@ejemplo.com"
@@ -254,12 +422,16 @@ export default function LoginScreen() {
               onChangeText={(t) => { setEmail(t); setFieldErrors((p) => ({ ...p, email: undefined })); }}
               autoCapitalize="none"
               keyboardType="email-address"
+              onFocus={() => setFocusedField('email')}
+              onBlur={() => setFocusedField(null)}
+              returnKeyType="next"
+              blurOnSubmit={false}
             />
           </View>
           {renderFieldError(fieldErrors.email)}
 
-          <View style={inputStyle(!!fieldErrors.password)}>
-            <Lock size={18} color={fieldErrors.password ? colors.error : colors.slate[400]} />
+          <View style={inputStyle('password', !!fieldErrors.password)}>
+            <Lock size={18} color={fieldErrors.password ? colors.error : focusedField === 'password' ? colors.primary[500] : colors.slate[400]} />
             <TextInput
               style={styles.input}
               placeholder="Contraseña"
@@ -267,6 +439,10 @@ export default function LoginScreen() {
               value={password}
               onChangeText={(t) => { setPassword(t); setFieldErrors((p) => ({ ...p, password: undefined })); }}
               secureTextEntry={!showPassword}
+              onFocus={() => setFocusedField('password')}
+              onBlur={() => setFocusedField(null)}
+              returnKeyType="done"
+              onSubmitEditing={handleAuth}
             />
             <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               {showPassword ? <EyeOff size={18} color={colors.slate[400]} /> : <Eye size={18} color={colors.slate[400]} />}
@@ -288,14 +464,23 @@ export default function LoginScreen() {
           )}
 
           <TouchableOpacity
-            style={[styles.primaryBtn, loading && styles.primaryBtnDisabled]}
+            style={[styles.primaryBtn, loading && styles.primaryBtnLoading]}
             onPress={handleAuth}
             disabled={loading}
             activeOpacity={0.85}
           >
-            {loading
-              ? <ActivityIndicator color={colors.white} />
-              : <Text style={styles.primaryBtnText}>{mode === 'login' ? 'Iniciar Sesión' : 'Registrarse'}</Text>}
+            {loading ? (
+              <View style={styles.loadingRow}>
+                <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                  <View style={styles.spinnerRing} />
+                </Animated.View>
+                <Text style={styles.primaryBtnText}>
+                  {mode === 'login' ? 'Iniciando sesión...' : 'Creando cuenta...'}
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.primaryBtnText}>{mode === 'login' ? 'Iniciar Sesión' : 'Registrarse'}</Text>
+            )}
           </TouchableOpacity>
 
           <View style={styles.switchRow}>
@@ -304,16 +489,22 @@ export default function LoginScreen() {
               <Text style={styles.switchLink}>{mode === 'login' ? 'Regístrate' : 'Inicia sesión'}</Text>
             </TouchableOpacity>
           </View>
+          </>)}
+
         </View>
 
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>o</Text>
-          <View style={styles.dividerLine} />
-        </View>
-        <TouchableOpacity style={styles.guestBtn} onPress={guestLogin} activeOpacity={0.7}>
-          <Text style={styles.guestBtnText}>Continuar como invitado</Text>
-        </TouchableOpacity>
+        {mode !== 'verify' && (
+          <>
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>o</Text>
+              <View style={styles.dividerLine} />
+            </View>
+            <TouchableOpacity style={styles.guestBtn} onPress={guestLogin} activeOpacity={0.7}>
+              <Text style={styles.guestBtnText}>Continuar como invitado</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
 
       {/* ===== Password Reset Modal ===== */}
@@ -492,7 +683,16 @@ const styles = StyleSheet.create({
     height: 50, gap: spacing.sm,
   },
   inputWrapperError: { borderColor: colors.error, backgroundColor: '#FFF5F5' },
-  input: { flex: 1, fontSize: 16, color: colors.slate[800] },
+  inputWrapperFocused: {
+    borderColor: colors.primary[400],
+    backgroundColor: colors.white,
+    shadowColor: colors.primary[500],
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  input: { flex: 1, fontSize: 16, color: colors.slate[800], outlineStyle: 'none' } as any,
 
   fieldError: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.sm, marginTop: 2 },
   fieldErrorText: { ...typography.caption, color: colors.error },
@@ -513,6 +713,14 @@ const styles = StyleSheet.create({
     borderRadius: radii.md, alignItems: 'center', marginTop: spacing.sm, ...shadows.primary,
   },
   primaryBtnDisabled: { opacity: 0.7 },
+  primaryBtnLoading: { opacity: 0.9 },
+  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  spinnerRing: {
+    width: 18, height: 18, borderRadius: 9,
+    borderWidth: 2.5,
+    borderColor: 'rgba(255,255,255,0.35)',
+    borderTopColor: colors.white,
+  },
   primaryBtnText: { ...typography.button, color: colors.white },
 
   switchRow: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.xl },
@@ -571,4 +779,13 @@ const styles = StyleSheet.create({
 
   resetSuccessBox: { alignItems: 'center', gap: spacing.lg, paddingVertical: spacing.xxxl },
   resetSuccessText: { ...typography.body, color: colors.success, textAlign: 'center', fontWeight: '600' },
+
+  // Email verification screen
+  verifyIconRow: { alignItems: 'center', marginBottom: spacing.md },
+  verifyDesc: { ...typography.small, color: colors.slate[500], textAlign: 'center', marginBottom: spacing.xl, lineHeight: 22 },
+  verifyEmail: { fontWeight: '700', color: colors.slate[700] },
+  resendBtn: { alignSelf: 'center', paddingVertical: spacing.sm, marginTop: spacing.xs },
+  resendBtnText: { ...typography.small, color: colors.primary[500], fontWeight: '600' },
+  backToLogin: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, marginTop: spacing.md },
+  backToLoginText: { ...typography.caption, color: colors.slate[400] },
 });

@@ -72,6 +72,9 @@ model User {
   syncEnabled         Boolean       @default(false)
   failedLoginAttempts Int           @default(0)
   lockedUntil         DateTime?
+  emailVerified       Boolean       @default(false)
+  emailVerifyOtp      String?
+  emailVerifyExpiry   DateTime?
   passwordResetToken  String?       @unique
   passwordResetExpiry DateTime?
   lastLogin           DateTime      @default(now())

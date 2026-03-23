@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, Animated, StyleSheet, Dimensions } from 'react-native';
-import { MapPin, ChevronRight, X, Users } from 'lucide-react-native';
+import { ChevronRight, X, Users } from 'lucide-react-native';
 import { Lactario } from '../../types';
 import { colors, spacing, typography, radii, shadows } from '../../theme';
 import { Rating } from '../ui';
@@ -63,12 +63,11 @@ export default function MarkerPreviewSheet({ lactario, onViewDetail, onDismiss }
           <Text style={styles.reviewCount}>({reviewCount} reseñas)</Text>
         </View>
 
-        <View style={styles.row}>
-          <MapPin size={14} color={colors.slate[400]} />
-          <Text style={styles.address} numberOfLines={1}>
-            {lactario.address || 'Ubicacion no disponible'}
+        {lactario.description ? (
+          <Text style={styles.description} numberOfLines={2}>
+            {lactario.description}
           </Text>
-        </View>
+        ) : null}
 
         {lactario.access && (
           <View style={styles.row}>
@@ -166,10 +165,10 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.slate[400],
   },
-  address: {
+  description: {
     ...typography.small,
     color: colors.slate[500],
-    flex: 1,
+    lineHeight: 20,
   },
   accessText: {
     ...typography.small,

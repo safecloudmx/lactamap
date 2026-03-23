@@ -9,6 +9,7 @@ interface AuthContextData {
   signIn: (email: string, pass: string) => Promise<void>;
   signOut: () => Promise<void>;
   register: (email: string, pass: string, name?: string) => Promise<void>;
+  completeAuth: (token: string, userData: User) => Promise<void>;
   guestLogin: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<void>;
 }
@@ -76,16 +77,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   async function register(email: string, pass: string, name?: string) {
     const response = await api.post('/auth/register', { email, password: pass, name });
-    const { token, user: userData } = response.data;
+    const data = response.data;
 
-    // Clear old nursing/local data before setting new user
+    // New flow: backend returns requiresVerification instead of token
+    if (data.requiresVerification) {
+      const err: any = new Error('EMAIL_NOT_VERIFIED');
+      err.code = 'REQUIRES_VERIFICATION';
+      err.email = data.email;
+      throw err;
+    }
+
+    // Legacy fallback (should not happen with new backend)
+    const { token, user: userData } = data;
     await AsyncStorage.removeItem('@Nursing:babies');
     await AsyncStorage.removeItem('@Nursing:sessions');
     await AsyncStorage.removeItem('@Nursing:activeBaby');
-
     await AsyncStorage.setItem('@Auth:user', JSON.stringify(userData));
     await AsyncStorage.setItem('@Auth:token', token);
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    setUser(userData);
+  }
 
+  async function completeAuth(token: string, userData: User) {
+    await AsyncStorage.removeItem('@Nursing:babies');
+    await AsyncStorage.removeItem('@Nursing:sessions');
+    await AsyncStorage.removeItem('@Nursing:activeBaby');
+    await AsyncStorage.setItem('@Auth:user', JSON.stringify(userData));
+    await AsyncStorage.setItem('@Auth:token', token);
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     setUser(userData);
   }
@@ -117,7 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut, register, guestLogin, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signOut, register, completeAuth, guestLogin, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -60,5 +60,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.slate[800],
     padding: 0,
-  },
+    outlineStyle: 'none',
+  } as any,
 });

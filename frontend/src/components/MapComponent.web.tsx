@@ -71,7 +71,7 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
           `})()`
         );
       })
-      .join('\n');
+      .join(';\n');
 
     return `<!DOCTYPE html>
 <html><head>

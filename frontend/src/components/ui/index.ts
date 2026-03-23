@@ -8,3 +8,4 @@ export { default as EmptyState } from './EmptyState';
 export { default as SearchBar } from './SearchBar';
 export { default as AvatarInitials } from './AvatarInitials';
 export { default as LoadingOverlay } from './LoadingOverlay';
+export { default as PlaceholderImage } from './PlaceholderImage';

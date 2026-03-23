@@ -32,6 +32,7 @@ export async function sendVerificationEmail(email: string, name: string, otp: st
     <p style="color:#334155;font-size:15px;margin:0 0 20px">Para activar tu cuenta ingresa el siguiente código de verificación:</p>
     ${otpBlock(otp)}
     <p style="color:#64748b;font-size:13px;text-align:center;margin:0 0 24px">Expira en <strong>15 minutos</strong></p>
+    <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0 0 8px">Si no ves este correo, revisa tu carpeta de Spam.</p>
     <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0">Si no creaste esta cuenta, ignora este mensaje.</p>
   `;
 
@@ -48,6 +49,7 @@ export async function sendPasswordResetEmail(email: string, otp: string) {
     <p style="color:#334155;font-size:15px;margin:0 0 20px">Recibimos una solicitud para restablecer tu contraseña. Usa este código:</p>
     ${otpBlock(otp)}
     <p style="color:#64748b;font-size:13px;text-align:center;margin:0 0 24px">Expira en <strong>1 hora</strong></p>
+    <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0 0 8px">Si no ves este correo, revisa tu carpeta de Spam.</p>
     <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0">Si no solicitaste esto, ignora este mensaje.</p>
   `;
 

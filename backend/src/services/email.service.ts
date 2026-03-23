@@ -1,7 +1,11 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = 'LactaMap <noreply@lactamap.app>';
+
+function getResend() {
+  if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY not configured');
+  return new Resend(process.env.RESEND_API_KEY);
+}
 
 const brandHtml = (content: string) => `
   <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:480px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #f1f5f9">
@@ -36,7 +40,7 @@ export async function sendVerificationEmail(email: string, name: string, otp: st
     <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0">Si no creaste esta cuenta, ignora este mensaje.</p>
   `;
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to: email,
     subject: 'Verifica tu cuenta — LactaMap',
@@ -53,7 +57,7 @@ export async function sendPasswordResetEmail(email: string, otp: string) {
     <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0">Si no solicitaste esto, ignora este mensaje.</p>
   `;
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to: email,
     subject: 'Restablecer contraseña — LactaMap',

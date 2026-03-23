@@ -70,6 +70,7 @@ export default function AdminReviewScreen() {
   const [selectedReason, setSelectedReason] = useState('');
   const [rejectNotes, setRejectNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
 
   const fetchSubmissions = useCallback(async () => {
     try {
@@ -123,8 +124,10 @@ export default function AdminReviewScreen() {
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Aprobar', onPress: async () => {
+          setApprovingId(id);
           try { await approveSubmission(id); fetchSubmissions(); }
           catch (err: any) { Alert.alert('Error', err.response?.data?.error || 'No se pudo aprobar'); }
+          finally { setApprovingId(null); }
         },
       },
     ]);
@@ -135,8 +138,10 @@ export default function AdminReviewScreen() {
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Aprobar', onPress: async () => {
+          setApprovingId(id);
           try { await approveEditProposal(id); fetchProposals(); }
           catch (err: any) { Alert.alert('Error', err.response?.data?.error || 'No se pudo aprobar'); }
+          finally { setApprovingId(null); }
         },
       },
     ]);
@@ -151,10 +156,10 @@ export default function AdminReviewScreen() {
 
   const handleRejectConfirm = async () => {
     if (!selectedId) return;
+    if (section === 'submissions' && !selectedReason) return;
     setSubmitting(true);
     try {
       if (section === 'submissions') {
-        if (!selectedReason) return;
         await rejectSubmission(selectedId, {
           rejectionReason: selectedReason,
           rejectionNotes: rejectNotes.trim() || undefined,
@@ -211,11 +216,13 @@ export default function AdminReviewScreen() {
         )}
         {item.status === 'PENDING' && (
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.approveBtn} onPress={() => handleApproveSubmission(item.id, item.lactario.name)}>
-              <CheckCircle size={16} color={colors.white} />
-              <Text style={styles.approveBtnText}>Aprobar</Text>
+            <TouchableOpacity style={styles.approveBtn} onPress={() => handleApproveSubmission(item.id, item.lactario.name)} disabled={approvingId === item.id}>
+              {approvingId === item.id
+                ? <ActivityIndicator size="small" color={colors.white} />
+                : <><CheckCircle size={16} color={colors.white} /><Text style={styles.approveBtnText}>Aprobar</Text></>
+              }
             </TouchableOpacity>
-            <TouchableOpacity style={styles.rejectBtn} onPress={() => openRejectModal(item.id)}>
+            <TouchableOpacity style={styles.rejectBtn} onPress={() => openRejectModal(item.id)} disabled={approvingId === item.id}>
               <XCircle size={16} color={colors.error} />
               <Text style={styles.rejectBtnText}>Rechazar</Text>
             </TouchableOpacity>
@@ -275,11 +282,13 @@ export default function AdminReviewScreen() {
         )}
         {item.status === 'PENDING' && (
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.approveBtn} onPress={() => handleApproveProposal(item.id, item.lactario?.name || '')}>
-              <CheckCircle size={16} color={colors.white} />
-              <Text style={styles.approveBtnText}>Aprobar</Text>
+            <TouchableOpacity style={styles.approveBtn} onPress={() => handleApproveProposal(item.id, item.lactario?.name || '')} disabled={approvingId === item.id}>
+              {approvingId === item.id
+                ? <ActivityIndicator size="small" color={colors.white} />
+                : <><CheckCircle size={16} color={colors.white} /><Text style={styles.approveBtnText}>Aprobar</Text></>
+              }
             </TouchableOpacity>
-            <TouchableOpacity style={styles.rejectBtn} onPress={() => openRejectModal(item.id)}>
+            <TouchableOpacity style={styles.rejectBtn} onPress={() => openRejectModal(item.id)} disabled={approvingId === item.id}>
               <XCircle size={16} color={colors.error} />
               <Text style={styles.rejectBtnText}>Rechazar</Text>
             </TouchableOpacity>

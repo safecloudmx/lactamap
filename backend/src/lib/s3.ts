@@ -42,13 +42,33 @@ export const keyFromUrl = (url: string): string | null => {
 };
 
 const SIGNED_URL_TTL = 6 * 60 * 60; // 6 hours in seconds
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour cache
+
+const signedUrlCache = new Map<string, { url: string; expiresAt: number }>();
 
 export const signUrl = async (url: string | null | undefined): Promise<string | null> => {
   if (!url) return null;
   const key = keyFromUrl(url);
   if (!key) return null;
+
+  const cached = signedUrlCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.url;
+  }
+
   const command = new GetObjectCommand({ Bucket: BUCKET, Key: key });
-  return awsGetSignedUrl(s3, command, { expiresIn: SIGNED_URL_TTL });
+  const signed = await awsGetSignedUrl(s3, command, { expiresIn: SIGNED_URL_TTL });
+  signedUrlCache.set(key, { url: signed, expiresAt: Date.now() + CACHE_TTL_MS });
+
+  // Evict stale entries periodically (every 500 entries)
+  if (signedUrlCache.size > 500) {
+    const now = Date.now();
+    for (const [k, v] of signedUrlCache) {
+      if (v.expiresAt < now) signedUrlCache.delete(k);
+    }
+  }
+
+  return signed;
 };
 
 export const signUrls = async (urls: (string | null | undefined)[]): Promise<(string | null)[]> => {

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
-import { MapPin } from 'lucide-react-native';
+import { MapPin, Baby, Star, Users } from 'lucide-react-native';
 import { Lactario } from '../types';
 import { ZoomTarget } from './MapComponent.web';
 import { colors } from '../theme';
@@ -25,9 +25,25 @@ const DEFAULT_REGION: Region = {
   longitudeDelta: 0.0421,
 };
 
+const PIN_COLORS: Record<string, string> = {
+  LACTARIO: '#f43f5e',
+  CAMBIADOR: '#8b5cf6',
+  BANO_FAMILIAR: '#0d9488',
+  PUNTO_INTERES: '#f59e0b',
+};
+
+const PinIcon = ({ type }: { type: string }) => {
+  switch (type) {
+    case 'CAMBIADOR': return <Baby size={14} color={colors.white} />;
+    case 'BANO_FAMILIAR': return <Users size={14} color={colors.white} />;
+    case 'PUNTO_INTERES': return <Star size={14} color={colors.white} />;
+    default: return <MapPin size={14} color={colors.white} />;
+  }
+};
+
 export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget }: MapComponentProps) {
   const mapRef = useRef<MapView | null>(null);
-  const [region, setRegion] = useState<Region>(DEFAULT_REGION);
+  const [initialRegion, setInitialRegion] = useState<Region>(DEFAULT_REGION);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   useEffect(() => {
@@ -50,11 +66,16 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
       setUserLocation(coords);
-      setRegion({
+      setInitialRegion({
         ...coords,
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       });
+      mapRef.current?.animateToRegion({
+        ...coords,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      }, 1000);
     })();
   }, []);
 
@@ -63,8 +84,7 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
       ref={mapRef}
       provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
       style={styles.map}
-      initialRegion={region}
-      region={region}
+      initialRegion={initialRegion}
       showsUserLocation={false}
       showsMyLocationButton={false}
       onPress={() => onSelectRoom && onSelectRoom(null as any)}
@@ -73,24 +93,28 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
         <PulsingLocationMarker coordinate={userLocation} />
       )}
 
-      {lactarios.map((lactario) => (
-        <Marker
-          key={lactario.id}
-          coordinate={{
-            latitude: Number(lactario.latitude),
-            longitude: Number(lactario.longitude),
-          }}
-          onPress={() => onSelectRoom && onSelectRoom(lactario)}
-          anchor={{ x: 0.5, y: 1 }}
-        >
-          <View style={styles.customPin}>
-            <View style={styles.pinHead}>
-              <MapPin size={14} color={colors.white} />
+      {lactarios.map((lactario) => {
+        const pt = lactario.placeType || 'LACTARIO';
+        const pinColor = PIN_COLORS[pt] || PIN_COLORS.LACTARIO;
+        return (
+          <Marker
+            key={lactario.id}
+            coordinate={{
+              latitude: Number(lactario.latitude),
+              longitude: Number(lactario.longitude),
+            }}
+            onPress={() => onSelectRoom && onSelectRoom(lactario)}
+            anchor={{ x: 0.5, y: 1 }}
+          >
+            <View style={styles.customPin}>
+              <View style={[styles.pinHead, { backgroundColor: pinColor }]}>
+                <PinIcon type={pt} />
+              </View>
+              <View style={[styles.pinTail, { borderTopColor: pinColor }]} />
             </View>
-            <View style={styles.pinTail} />
-          </View>
-        </Marker>
-      ))}
+          </Marker>
+        );
+      })}
     </MapView>
   );
 }
@@ -107,7 +131,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.primary[500],
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
@@ -126,7 +149,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 8,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: colors.primary[500],
     marginTop: -2,
   },
 });

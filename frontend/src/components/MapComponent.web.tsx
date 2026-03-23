@@ -143,11 +143,14 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
   map.on('zoomend', _updateCount);
   setTimeout(_updateCount, 800);
 
-  // Listen for commands from the React parent (zoom, etc.)
+  // Listen for commands from the React parent (zoom, recount, etc.)
   window.addEventListener('message', function(e) {
     if (!e.data || !e.data.type) return;
     if (e.data.type === 'zoomTo') {
       map.setView([e.data.lat, e.data.lng], e.data.zoom || 14);
+    }
+    if (e.data.type === 'recount') {
+      _updateCount();
     }
   });
 
@@ -174,6 +177,8 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
 </body></html>`;
   }, [lactarios]);
 
+  // Reset counts when lactarios change; iframe's _updateCount will send
+  // viewport-based counts ~800ms after reload, overriding these totals.
   useEffect(() => {
     const counts = { LACTARIO: 0, CAMBIADOR: 0, BANO_FAMILIAR: 0, PUNTO_INTERES: 0 } as Record<string, number>;
     lactarios.forEach((l) => {
@@ -181,6 +186,12 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
       counts[t] = (counts[t] || 0) + 1;
     });
     setVisibleCounts(counts as any);
+
+    // After the iframe reloads with new markers, nudge it to recount
+    const timer = setTimeout(() => {
+      iframeRef.current?.contentWindow?.postMessage({ type: 'recount' }, '*');
+    }, 1000);
+    return () => clearTimeout(timer);
   }, [lactarios]);
 
   useEffect(() => {

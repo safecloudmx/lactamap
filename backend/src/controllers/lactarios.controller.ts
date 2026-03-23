@@ -37,7 +37,7 @@ const getAll = async (req: Request, res: Response) => {
       include: {
         amenities: true,
         owner: { select: { id: true, name: true, email: true } },
-        photos: { where: { moderationStatus: 'APPROVED' }, orderBy: { createdAt: 'desc' }, take: 5 },
+        photos: { where: { moderationStatus: 'APPROVED' }, orderBy: { createdAt: 'desc' }, take: 1 },
         _count: { select: { reviews: true } },
         submission: {
           select: {
@@ -55,7 +55,7 @@ const getAll = async (req: Request, res: Response) => {
       rating: Number(l.avgRating),
       reviewCount: l._count.reviews,
       imageUrl: await signUrl(l.photos[0]?.url ?? null),
-      photos: await Promise.all(l.photos.map(async (p) => ({ id: p.id, url: await signUrl(p.url) }))),
+      photos: l.photos.map((p) => ({ id: p.id, url: p.url })),
     })));
     res.json(result);
   } catch (error) {

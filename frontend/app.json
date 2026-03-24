@@ -24,7 +24,14 @@
       }
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "name": "LactaMap",
+      "shortName": "LactaMap",
+      "description": "Encuentra lactarios, cambiadores y puntos de interés cerca de ti",
+      "themeColor": "#f43f5e",
+      "backgroundColor": "#ffffff",
+      "display": "standalone",
+      "orientation": "portrait"
     }
   }
 }

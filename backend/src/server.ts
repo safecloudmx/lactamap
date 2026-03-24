@@ -11,6 +11,7 @@ import nursingSessionsRoutes from './routes/nursingSessions.routes';
 import submissionsRoutes from './routes/submissions.routes';
 import editProposalsRoutes from './routes/editProposals.routes';
 import photosRoutes from './routes/photos.routes';
+import pumpingSessionsRoutes from './routes/pumpingSessions.routes';
 
 dotenv.config();
 
@@ -60,6 +61,7 @@ app.use('/api/v1/nursing-sessions', nursingSessionsRoutes);
 app.use('/api/v1/submissions', submissionsRoutes);
 app.use('/api/v1/edit-proposals', editProposalsRoutes);
 app.use('/api/v1', photosRoutes);
+app.use('/api/v1/pumping-sessions', pumpingSessionsRoutes);
 
 // Health check
 app.get('/', (_req, res) => {

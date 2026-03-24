@@ -315,4 +315,69 @@ export const rejectEditProposal = async (id: string, data: { rejectionNotes?: st
   return response.data;
 };
 
+// === Pumping Sessions ===
+
+export const getPumpingSessions = async (filters?: { date?: string; babyId?: string }) => {
+  const response = await api.get('/pumping-sessions', { params: filters });
+  return response.data;
+};
+
+export const getPumpingSession = async (id: string) => {
+  const response = await api.get(`/pumping-sessions/${id}`);
+  return response.data;
+};
+
+export const createPumpingSession = async (data: {
+  side: string;
+  pumpedAt: string;
+  amountMl: number;
+  notes?: string;
+  babyId?: string | null;
+}) => {
+  const response = await api.post('/pumping-sessions', data);
+  return response.data;
+};
+
+export const updatePumpingSession = async (id: string, data: {
+  side?: string;
+  pumpedAt?: string;
+  amountMl?: number;
+  notes?: string;
+  babyId?: string | null;
+}) => {
+  const response = await api.put(`/pumping-sessions/${id}`, data);
+  return response.data;
+};
+
+export const deletePumpingSession = async (id: string) => {
+  const response = await api.delete(`/pumping-sessions/${id}`);
+  return response.data;
+};
+
+export const uploadPumpingPhoto = async (sessionId: string, imageUri: string) => {
+  const token = await AsyncStorage.getItem('@Auth:token');
+  const formData = new FormData();
+
+  if (typeof document !== 'undefined') {
+    const res = await fetch(imageUri);
+    const blob = await res.blob();
+    formData.append('photo', blob, 'photo.jpg');
+  } else {
+    formData.append('photo', { uri: imageUri, name: 'photo.jpg', type: 'image/jpeg' } as any);
+  }
+
+  const response = await fetch(`${BASE_URL}/pumping-sessions/${sessionId}/photos`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (!response.ok) throw new Error('Error uploading photo');
+  return response.json();
+};
+
+export const deletePumpingPhoto = async (sessionId: string, photoId: string) => {
+  const response = await api.delete(`/pumping-sessions/${sessionId}/photos/${photoId}`);
+  return response.data;
+};
+
 export default api;

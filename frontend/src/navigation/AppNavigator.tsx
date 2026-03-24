@@ -25,6 +25,15 @@ import FeedingHistoryScreen from '../screens/FeedingHistoryScreen';
 import FeedingSessionDetailScreen from '../screens/FeedingSessionDetailScreen';
 import AdminReviewScreen from '../screens/AdminReviewScreen';
 import EditRoomScreen from '../screens/EditRoomScreen';
+import PumpingLogScreen from '../screens/PumpingLogScreen';
+import PumpingHistoryScreen from '../screens/PumpingHistoryScreen';
+import SleepTimerScreen from '../screens/SleepTimerScreen';
+import SleepHistoryScreen from '../screens/SleepHistoryScreen';
+import SleepSessionDetailScreen from '../screens/SleepSessionDetailScreen';
+import DiaperLogScreen from '../screens/DiaperLogScreen';
+import DiaperHistoryScreen from '../screens/DiaperHistoryScreen';
+import DiaperRecordDetailScreen from '../screens/DiaperRecordDetailScreen';
+import RelaxingSoundsScreen from '../screens/RelaxingSoundsScreen';
 
 import CustomTabBar from '../components/CustomTabBar';
 import DrawerContent from './DrawerContent';
@@ -132,6 +141,51 @@ export const AppNavigator = () => {
             <Stack.Screen
               name="AdminReview"
               component={AdminReviewScreen}
+              options={{ presentation: 'card' }}
+            />
+            <Stack.Screen
+              name="PumpingLog"
+              component={PumpingLogScreen}
+              options={{ presentation: 'card' }}
+            />
+            <Stack.Screen
+              name="PumpingHistory"
+              component={PumpingHistoryScreen}
+              options={{ presentation: 'card' }}
+            />
+            <Stack.Screen
+              name="SleepTimer"
+              component={SleepTimerScreen}
+              options={{ presentation: 'card' }}
+            />
+            <Stack.Screen
+              name="SleepHistory"
+              component={SleepHistoryScreen}
+              options={{ presentation: 'card' }}
+            />
+            <Stack.Screen
+              name="SleepSessionDetail"
+              component={SleepSessionDetailScreen}
+              options={{ presentation: 'card' }}
+            />
+            <Stack.Screen
+              name="DiaperLog"
+              component={DiaperLogScreen}
+              options={{ presentation: 'card' }}
+            />
+            <Stack.Screen
+              name="DiaperHistory"
+              component={DiaperHistoryScreen}
+              options={{ presentation: 'card' }}
+            />
+            <Stack.Screen
+              name="DiaperRecordDetail"
+              component={DiaperRecordDetailScreen}
+              options={{ presentation: 'card' }}
+            />
+            <Stack.Screen
+              name="RelaxingSounds"
+              component={RelaxingSoundsScreen}
               options={{ presentation: 'card' }}
             />
             <Stack.Screen

@@ -61,8 +61,8 @@ export default function NursingTimerScreen() {
     await loadTodaySessions();
 
     infoAlert(
-      'Sesion guardada',
-      `Duracion total: ${formatDuration(session.totalDuration)}\n` +
+      'Sesión guardada',
+      `Duración total: ${formatDuration(session.totalDuration)}\n` +
       `Izquierdo: ${formatDuration(session.leftDuration)}\n` +
       `Derecho: ${formatDuration(session.rightDuration)}` +
       (session.totalPauseTime > 0 ? `\nPausa: ${formatDuration(session.totalPauseTime)}` : '')
@@ -72,7 +72,7 @@ export default function NursingTimerScreen() {
   const handleDeleteSession = (session: FeedingSession) => {
     confirmAlert(
       'Eliminar registro',
-      `¿Eliminar la sesion de ${formatSessionTime(session.startedAt)}?`,
+      `¿Eliminar la sesión de ${formatSessionTime(session.startedAt)}?`,
       async () => {
         await nursingStorage.deleteSession(session.id);
         setTodaySessions((prev) => prev.filter((s) => s.id !== session.id));
@@ -90,7 +90,7 @@ export default function NursingTimerScreen() {
         >
           <ArrowLeft size={24} color={colors.slate[800]} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Cronometro de Lactancia</Text>
+        <Text style={styles.headerTitle}>Cronómetro de Lactancia</Text>
         <View style={{ width: 24 }} />
       </View>
 

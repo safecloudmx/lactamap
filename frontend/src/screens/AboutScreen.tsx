@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Baby, Heart } from 'lucide-react-native';
+import { Heart } from 'lucide-react-native';
 import { AppHeader } from '../components/ui';
 import { colors, spacing, typography, radii } from '../theme';
 
@@ -17,13 +17,14 @@ export default function AboutScreen() {
 
       <View style={styles.content}>
         {/* Icon */}
-        <View style={styles.iconCircle}>
-          <Baby size={48} color={colors.primary[500]} />
-        </View>
+        <Image
+          source={require('../../assets/icon.png')}
+          style={styles.brandLogo}
+        />
 
         {/* Title */}
         <Text style={styles.appName}>LactaMap - Acerca de</Text>
-        <Text style={styles.version}>v0.1-260324-2</Text>
+        <Text style={styles.version}>v0.1-260324-3</Text>
 
         {/* Mission */}
         <Text style={styles.mission}>
@@ -66,13 +67,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xxxl,
     paddingBottom: spacing.xxxl,
   },
-  iconCircle: {
+  brandLogo: {
     width: 100,
     height: 100,
-    borderRadius: 50,
-    backgroundColor: colors.primary[50],
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 24,
     marginBottom: spacing.xl,
   },
   appName: {

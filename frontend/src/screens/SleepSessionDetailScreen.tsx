@@ -1,20 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput,
-  KeyboardAvoidingView, Platform, Modal,
+  KeyboardAvoidingView, Platform, Modal, Image,
 } from 'react-native';
 import { confirmAlert, infoAlert } from '../services/crossPlatformAlert';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  ArrowLeft, Trash2, Clock, Pause as PauseIcon, Calendar, Timer,
-  Pencil, Check, X,
+  ArrowLeft, Trash2, Clock, Pause as PauseIcon, Calendar,
+  Pencil, Check, X, Moon, Baby as BabyIcon,
+  StickyNote, Paperclip, Camera, ImagePlus,
 } from 'lucide-react-native';
 import { colors, spacing, typography, radii, shadows } from '../theme';
-import { FeedingSession } from '../types';
-import { formatDuration } from '../hooks/useNursingTimer';
-import * as nursingStorage from '../services/nursingStorage';
-import BabySelector from '../components/BabySelector';
+import { SleepSession, Baby } from '../types';
+import { formatDuration } from '../hooks/useSleepTimer';
+import * as sleepStorage from '../services/sleepStorage';
+
+let ImagePicker: any = null;
+try { ImagePicker = require('expo-image-picker'); } catch (_) {}
+
+const sleepColors = {
+  main: '#7c3aed',
+  light: '#f5f3ff',
+  medium: '#ede9fe',
+  accent: '#a78bfa',
+};
+
+const MAX_NOTES = 3000;
 
 function formatDateTime(isoString: string): { date: string; time: string } {
   const d = new Date(isoString);
@@ -31,16 +43,7 @@ function formatDateTime(isoString: string): { date: string; time: string } {
   return { date, time };
 }
 
-function parseTimeToComponents(seconds: number): { h: number; m: number; s: number } {
-  return {
-    h: Math.floor(seconds / 3600),
-    m: Math.floor((seconds % 3600) / 60),
-    s: seconds % 60,
-  };
-}
-
 function parseHHMM(timeStr: string): { hours: number; minutes: number } | null {
-  // Accept HH:MM format (24h)
   const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})$/);
   if (!match) return null;
   const hours = parseInt(match[1], 10);
@@ -49,45 +52,54 @@ function parseHHMM(timeStr: string): { hours: number; minutes: number } | null {
   return { hours, minutes };
 }
 
-export default function FeedingSessionDetailScreen() {
+export default function SleepSessionDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteProp<{ params: { sessionId: string } }, 'params'>>();
   const insets = useSafeAreaInsets();
 
   const { sessionId } = route.params;
 
-  const [session, setSession] = useState<FeedingSession | null>(null);
+  const [session, setSession] = useState<SleepSession | null>(null);
   const [notes, setNotes] = useState('');
   const [selectedBabyId, setSelectedBabyId] = useState<string | null>(null);
+  const [babies, setBabies] = useState<Baby[]>([]);
+  const [photos, setPhotos] = useState<{ uri: string }[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Edit modal state
   const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editLeftMin, setEditLeftMin] = useState('');
-  const [editLeftSec, setEditLeftSec] = useState('');
-  const [editRightMin, setEditRightMin] = useState('');
-  const [editRightSec, setEditRightSec] = useState('');
+  const [editDurationMin, setEditDurationMin] = useState('');
+  const [editDurationSec, setEditDurationSec] = useState('');
   const [editStartTime, setEditStartTime] = useState('');
   const [editEndTime, setEditEndTime] = useState('');
-  // Track which field was last changed for auto-recalculation
   const [lastChanged, setLastChanged] = useState<'duration' | 'start' | 'end' | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     loadSession();
   }, [sessionId]);
 
+  useFocusEffect(
+    useCallback(() => {
+      sleepStorage.getBabies().then(setBabies);
+    }, [])
+  );
+
   const loadSession = async () => {
-    const s = await nursingStorage.getSessionById(sessionId);
+    const all = await sleepStorage.getSessions();
+    const s = all.find((x) => x.id === sessionId) ?? null;
     if (s) {
       setSession(s);
       setNotes(s.notes);
       setSelectedBabyId(s.babyId ?? null);
+      setPhotos(s.photos.map((uri) => ({ uri })));
     }
   };
 
   const handleNotesChange = (text: string) => {
-    setNotes(text);
+    setNotes(text.slice(0, MAX_NOTES));
     setHasChanges(true);
   };
 
@@ -99,9 +111,10 @@ export default function FeedingSessionDetailScreen() {
   const handleSave = async () => {
     if (!session) return;
     setSaving(true);
-    await nursingStorage.updateSession(session.id, {
+    await sleepStorage.updateSession(session.id, {
       notes: notes.trim(),
       babyId: selectedBabyId ?? undefined,
+      photos: photos.map((p) => p.uri),
     });
     setSaving(false);
     setHasChanges(false);
@@ -114,24 +127,53 @@ export default function FeedingSessionDetailScreen() {
       'Eliminar sesión',
       '¿Estás segura de que quieres eliminar esta sesión?',
       async () => {
-        await nursingStorage.deleteSession(session.id);
+        await sleepStorage.deleteSession(session.id);
         navigation.goBack();
       }
     );
   };
 
-  // === Edit Modal Logic ===
+  // Photo handlers
+  const handlePickImage = async () => {
+    if (Platform.OS === 'web') {
+      if (fileInputRef.current) fileInputRef.current.click();
+      return;
+    }
+    if (!ImagePicker) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      setPhotos((prev) => [...prev, { uri: result.assets[0].uri }]);
+      setHasChanges(true);
+    }
+  };
 
+  const handleTakePhoto = async () => {
+    if (!ImagePicker) return;
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      setPhotos((prev) => [...prev, { uri: result.assets[0].uri }]);
+      setHasChanges(true);
+    }
+  };
+
+  const removePhoto = (index: number) => {
+    setPhotos((prev) => prev.filter((_, i) => i !== index));
+    setHasChanges(true);
+  };
+
+  // === Edit Modal Logic ===
   const openEditModal = () => {
     if (!session) return;
-
-    const leftParts = parseTimeToComponents(session.leftDuration);
-    const rightParts = parseTimeToComponents(session.rightDuration);
-
-    setEditLeftMin(String(leftParts.h * 60 + leftParts.m));
-    setEditLeftSec(String(leftParts.s));
-    setEditRightMin(String(rightParts.h * 60 + rightParts.m));
-    setEditRightSec(String(rightParts.s));
+    const totalMin = Math.floor(session.totalDuration / 60);
+    const totalSec = session.totalDuration % 60;
+    setEditDurationMin(String(totalMin));
+    setEditDurationSec(String(totalSec));
 
     const startDate = new Date(session.startedAt);
     const endDate = new Date(session.endedAt);
@@ -145,40 +187,10 @@ export default function FeedingSessionDetailScreen() {
     setEditModalVisible(true);
   };
 
-  const computeTotalDurationSec = (): number => {
-    const leftSec = (parseInt(editLeftMin, 10) || 0) * 60 + (parseInt(editLeftSec, 10) || 0);
-    const rightSec = (parseInt(editRightMin, 10) || 0) * 60 + (parseInt(editRightSec, 10) || 0);
-    return leftSec + rightSec;
-  };
-
-  const handleDurationChange = (field: 'leftMin' | 'leftSec' | 'rightMin' | 'rightSec', value: string) => {
-    // Only allow numeric input
-    const numericValue = value.replace(/[^0-9]/g, '');
-    switch (field) {
-      case 'leftMin': setEditLeftMin(numericValue); break;
-      case 'leftSec': setEditLeftSec(numericValue); break;
-      case 'rightMin': setEditRightMin(numericValue); break;
-      case 'rightSec': setEditRightSec(numericValue); break;
-    }
-    setLastChanged('duration');
-  };
-
-  const handleStartTimeChange = (value: string) => {
-    setEditStartTime(value);
-    setLastChanged('start');
-  };
-
-  const handleEndTimeChange = (value: string) => {
-    setEditEndTime(value);
-    setLastChanged('end');
-  };
-
   const handleSaveEdit = () => {
     if (!session) return;
 
-    const leftTotalSec = (parseInt(editLeftMin, 10) || 0) * 60 + (parseInt(editLeftSec, 10) || 0);
-    const rightTotalSec = (parseInt(editRightMin, 10) || 0) * 60 + (parseInt(editRightSec, 10) || 0);
-    const totalDurationSec = leftTotalSec + rightTotalSec;
+    const totalDurationSec = (parseInt(editDurationMin, 10) || 0) * 60 + (parseInt(editDurationSec, 10) || 0);
 
     if (totalDurationSec <= 0) {
       infoAlert('Error', 'La duración total debe ser mayor a 0.');
@@ -204,46 +216,27 @@ export default function FeedingSessionDetailScreen() {
     let newEnd: Date;
 
     if (lastChanged === 'end') {
-      // User changed end time -> recalculate start time based on end - totalDuration
       newEnd = new Date(originalEnd);
       newEnd.setHours(parsedEnd.hours, parsedEnd.minutes, 0, 0);
       newStart = new Date(newEnd.getTime() - totalDurationSec * 1000);
-    } else if (lastChanged === 'start') {
-      // User changed start time -> recalculate end time based on start + totalDuration
-      newStart = new Date(originalStart);
-      newStart.setHours(parsedStart.hours, parsedStart.minutes, 0, 0);
-      newEnd = new Date(newStart.getTime() + totalDurationSec * 1000);
     } else {
-      // Duration changed (or nothing specific) -> keep start, recalculate end
       newStart = new Date(originalStart);
       newStart.setHours(parsedStart.hours, parsedStart.minutes, 0, 0);
       newEnd = new Date(newStart.getTime() + totalDurationSec * 1000);
     }
 
-    // Determine lastSide
-    let lastSide: 'left' | 'right' | 'both' = 'both';
-    if (leftTotalSec > 0 && rightTotalSec === 0) lastSide = 'left';
-    else if (rightTotalSec > 0 && leftTotalSec === 0) lastSide = 'right';
-
-    const updatedSession: FeedingSession = {
+    const updatedSession: SleepSession = {
       ...session,
-      leftDuration: leftTotalSec,
-      rightDuration: rightTotalSec,
       totalDuration: totalDurationSec,
       startedAt: newStart.toISOString(),
       endedAt: newEnd.toISOString(),
-      lastSide,
       updatedAt: new Date().toISOString(),
     };
 
-    // Save to storage
-    nursingStorage.updateSession(session.id, {
-      leftDuration: leftTotalSec,
-      rightDuration: rightTotalSec,
+    sleepStorage.updateSession(session.id, {
       totalDuration: totalDurationSec,
       startedAt: newStart.toISOString(),
       endedAt: newEnd.toISOString(),
-      lastSide,
     });
 
     setSession(updatedSession);
@@ -251,14 +244,10 @@ export default function FeedingSessionDetailScreen() {
     infoAlert('Actualizado', 'Los tiempos de la sesión han sido actualizados.');
   };
 
-  // Compute a preview of the recalculated times for the modal
   const getPreview = () => {
     if (!session) return { start: '--:--', end: '--:--', total: '0s' };
 
-    const leftTotalSec = (parseInt(editLeftMin, 10) || 0) * 60 + (parseInt(editLeftSec, 10) || 0);
-    const rightTotalSec = (parseInt(editRightMin, 10) || 0) * 60 + (parseInt(editRightSec, 10) || 0);
-    const totalDurationSec = leftTotalSec + rightTotalSec;
-
+    const totalDurationSec = (parseInt(editDurationMin, 10) || 0) * 60 + (parseInt(editDurationSec, 10) || 0);
     const parsedStart = parseHHMM(editStartTime);
     const parsedEnd = parseHHMM(editEndTime);
 
@@ -282,11 +271,7 @@ export default function FeedingSessionDetailScreen() {
       }
     }
 
-    return {
-      start: previewStart,
-      end: previewEnd,
-      total: formatDuration(totalDurationSec),
-    };
+    return { start: previewStart, end: previewEnd, total: formatDuration(totalDurationSec) };
   };
 
   if (!session) {
@@ -296,7 +281,7 @@ export default function FeedingSessionDetailScreen() {
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <ArrowLeft size={24} color={colors.slate[800]} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Detalle de Sesión</Text>
+          <Text style={styles.headerTitle}>Detalle de Sueño</Text>
           <View style={{ width: 24 }} />
         </View>
         <View style={styles.loadingContainer}>
@@ -324,7 +309,7 @@ export default function FeedingSessionDetailScreen() {
           >
             <ArrowLeft size={24} color={colors.slate[800]} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Detalle de Sesión</Text>
+          <Text style={styles.headerTitle}>Detalle de Sueño</Text>
           <TouchableOpacity
             onPress={handleDelete}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -341,31 +326,17 @@ export default function FeedingSessionDetailScreen() {
           {/* Duration Summary */}
           <View style={styles.summaryCard}>
             <View style={styles.summaryHeader}>
-              <Timer size={20} color={colors.primary[500]} />
+              <Moon size={20} color={sleepColors.main} />
               <Text style={styles.summaryTitle}>Duración</Text>
               <TouchableOpacity
                 onPress={openEditModal}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={styles.editIconBtn}
               >
-                <Pencil size={16} color={colors.primary[500]} />
+                <Pencil size={16} color={sleepColors.main} />
               </TouchableOpacity>
             </View>
             <Text style={styles.totalDuration}>{formatDuration(session.totalDuration)}</Text>
-            <View style={styles.sidesRow}>
-              <View style={[styles.sideCard, session.leftDuration > 0 && styles.sideCardActive]}>
-                <Text style={styles.sideCardLabel}>Izquierdo</Text>
-                <Text style={[styles.sideCardValue, session.leftDuration > 0 && styles.sideCardValueActive]}>
-                  {formatDuration(session.leftDuration)}
-                </Text>
-              </View>
-              <View style={[styles.sideCard, session.rightDuration > 0 && styles.sideCardActive]}>
-                <Text style={styles.sideCardLabel}>Derecho</Text>
-                <Text style={[styles.sideCardValue, session.rightDuration > 0 && styles.sideCardValueActive]}>
-                  {formatDuration(session.rightDuration)}
-                </Text>
-              </View>
-            </View>
           </View>
 
           {/* Pause */}
@@ -404,12 +375,35 @@ export default function FeedingSessionDetailScreen() {
           </View>
 
           {/* Baby Selector */}
-          <View style={styles.section}>
-            <BabySelector
-              selectedBabyId={selectedBabyId}
-              onSelectBaby={handleBabyChange}
-            />
-          </View>
+          {babies.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionLabelRow}>
+                <BabyIcon size={16} color={colors.slate[500]} />
+                <Text style={styles.sectionLabel}>Bebé</Text>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.babyChipsRow}
+              >
+                {babies.map((baby) => {
+                  const isSelected = selectedBabyId === baby.id;
+                  return (
+                    <TouchableOpacity
+                      key={baby.id}
+                      style={[styles.babyChip, isSelected && styles.babyChipSelected]}
+                      onPress={() => handleBabyChange(isSelected ? null : baby.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.babyChipText, isSelected && styles.babyChipTextSelected]}>
+                        {baby.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
 
           {/* Notes */}
           <View style={styles.section}>
@@ -423,12 +417,60 @@ export default function FeedingSessionDetailScreen() {
                 onChangeText={handleNotesChange}
                 multiline
                 numberOfLines={4}
-                maxLength={3000}
+                maxLength={MAX_NOTES}
                 textAlignVertical="top"
               />
-              <Text style={styles.charCount}>{notes.length}/3000</Text>
+              <Text style={styles.charCount}>{notes.length}/{MAX_NOTES}</Text>
             </View>
           </View>
+
+          {/* Photos */}
+          <View style={styles.section}>
+            <View style={styles.sectionLabelRow}>
+              <Paperclip size={16} color={colors.slate[500]} />
+              <Text style={styles.sectionLabel}>Fotos</Text>
+              <View style={{ flex: 1 }} />
+              <TouchableOpacity onPress={handlePickImage} style={{ marginRight: spacing.md }}>
+                <ImagePlus size={20} color={colors.slate[500]} />
+              </TouchableOpacity>
+              {Platform.OS !== 'web' && (
+                <TouchableOpacity onPress={handleTakePhoto}>
+                  <Camera size={20} color={colors.slate[500]} />
+                </TouchableOpacity>
+              )}
+            </View>
+            {photos.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: spacing.sm }}>
+                {photos.map((photo, i) => (
+                  <View key={i} style={styles.photoThumb}>
+                    <Image source={{ uri: photo.uri }} style={styles.photoImg} />
+                    <TouchableOpacity style={styles.photoRemove} onPress={() => removePhoto(i)}>
+                      <X size={12} color={colors.white} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+
+          {/* Web file input */}
+          {Platform.OS === 'web' && (
+            <input
+              ref={fileInputRef as any}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={(e: any) => {
+                const file = e.target?.files?.[0];
+                if (file) {
+                  const uri = URL.createObjectURL(file);
+                  setPhotos((prev) => [...prev, { uri }]);
+                  setHasChanges(true);
+                }
+                if (fileInputRef.current) fileInputRef.current.value = '';
+              }}
+            />
+          )}
 
           {/* Save Button */}
           {hasChanges && (
@@ -461,73 +503,43 @@ export default function FeedingSessionDetailScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Duration Inputs */}
-              <Text style={styles.modalSectionLabel}>Duración por lado</Text>
-
-              <View style={styles.modalSidesRow}>
-                {/* Left Side */}
-                <View style={styles.modalSideBox}>
-                  <Text style={styles.modalSideLabel}>🤱 Izquierdo</Text>
-                  <View style={styles.modalTimeInputRow}>
-                    <View style={styles.modalTimeField}>
-                      <TextInput
-                        style={styles.modalTimeInput}
-                        value={editLeftMin}
-                        onChangeText={(v) => handleDurationChange('leftMin', v)}
-                        keyboardType="number-pad"
-                        maxLength={3}
-                        selectTextOnFocus
-                      />
-                      <Text style={styles.modalTimeUnit}>min</Text>
-                    </View>
-                    <View style={styles.modalTimeField}>
-                      <TextInput
-                        style={styles.modalTimeInput}
-                        value={editLeftSec}
-                        onChangeText={(v) => handleDurationChange('leftSec', v)}
-                        keyboardType="number-pad"
-                        maxLength={2}
-                        selectTextOnFocus
-                      />
-                      <Text style={styles.modalTimeUnit}>seg</Text>
-                    </View>
-                  </View>
+              {/* Duration Input */}
+              <Text style={styles.modalSectionLabel}>Duración total</Text>
+              <View style={styles.modalDurationRow}>
+                <View style={styles.modalTimeField}>
+                  <TextInput
+                    style={styles.modalTimeInput}
+                    value={editDurationMin}
+                    onChangeText={(v) => {
+                      setEditDurationMin(v.replace(/[^0-9]/g, ''));
+                      setLastChanged('duration');
+                    }}
+                    keyboardType="number-pad"
+                    maxLength={4}
+                    selectTextOnFocus
+                  />
+                  <Text style={styles.modalTimeUnit}>min</Text>
                 </View>
-
-                {/* Right Side */}
-                <View style={styles.modalSideBox}>
-                  <Text style={styles.modalSideLabel}>🤱 Derecho</Text>
-                  <View style={styles.modalTimeInputRow}>
-                    <View style={styles.modalTimeField}>
-                      <TextInput
-                        style={styles.modalTimeInput}
-                        value={editRightMin}
-                        onChangeText={(v) => handleDurationChange('rightMin', v)}
-                        keyboardType="number-pad"
-                        maxLength={3}
-                        selectTextOnFocus
-                      />
-                      <Text style={styles.modalTimeUnit}>min</Text>
-                    </View>
-                    <View style={styles.modalTimeField}>
-                      <TextInput
-                        style={styles.modalTimeInput}
-                        value={editRightSec}
-                        onChangeText={(v) => handleDurationChange('rightSec', v)}
-                        keyboardType="number-pad"
-                        maxLength={2}
-                        selectTextOnFocus
-                      />
-                      <Text style={styles.modalTimeUnit}>seg</Text>
-                    </View>
-                  </View>
+                <View style={styles.modalTimeField}>
+                  <TextInput
+                    style={styles.modalTimeInput}
+                    value={editDurationSec}
+                    onChangeText={(v) => {
+                      setEditDurationSec(v.replace(/[^0-9]/g, ''));
+                      setLastChanged('duration');
+                    }}
+                    keyboardType="number-pad"
+                    maxLength={2}
+                    selectTextOnFocus
+                  />
+                  <Text style={styles.modalTimeUnit}>seg</Text>
                 </View>
               </View>
 
               {/* Total preview */}
               {preview && (
                 <View style={styles.previewTotalRow}>
-                  <Timer size={14} color={colors.primary[500]} />
+                  <Moon size={14} color={sleepColors.main} />
                   <Text style={styles.previewTotalLabel}>Total:</Text>
                   <Text style={styles.previewTotalValue}>{preview.total}</Text>
                 </View>
@@ -537,14 +549,13 @@ export default function FeedingSessionDetailScreen() {
               <Text style={[styles.modalSectionLabel, { marginTop: spacing.lg }]}>
                 Hora de inicio y fin (formato 24h)
               </Text>
-
               <View style={styles.modalTimesRow}>
                 <View style={styles.modalTimeBox}>
                   <Text style={styles.modalTimeBoxLabel}>Inicio</Text>
                   <TextInput
                     style={styles.modalClockInput}
                     value={editStartTime}
-                    onChangeText={handleStartTimeChange}
+                    onChangeText={(v) => { setEditStartTime(v); setLastChanged('start'); }}
                     placeholder="HH:MM"
                     placeholderTextColor={colors.slate[400]}
                     keyboardType="numbers-and-punctuation"
@@ -560,7 +571,7 @@ export default function FeedingSessionDetailScreen() {
                   <TextInput
                     style={styles.modalClockInput}
                     value={editEndTime}
-                    onChangeText={handleEndTimeChange}
+                    onChangeText={(v) => { setEditEndTime(v); setLastChanged('end'); }}
                     placeholder="HH:MM"
                     placeholderTextColor={colors.slate[400]}
                     keyboardType="numbers-and-punctuation"
@@ -573,15 +584,15 @@ export default function FeedingSessionDetailScreen() {
                 </View>
               </View>
 
-              {/* Explanation */}
+              {/* Hint */}
               <View style={styles.hintBox}>
                 <Text style={styles.hintText}>
-                  💡 Al cambiar la duracion, se recalcula la hora de fin.{'\n'}
+                  Al cambiar la duracion, se recalcula la hora de fin.{'\n'}
                   Al cambiar la hora de fin, se recalcula la hora de inicio.
                 </Text>
               </View>
 
-              {/* Action Buttons */}
+              {/* Actions */}
               <View style={styles.modalActions}>
                 <TouchableOpacity
                   style={styles.modalCancelBtn}
@@ -661,7 +672,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.primary[50],
+    backgroundColor: sleepColors.light,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -669,33 +680,6 @@ const styles = StyleSheet.create({
     fontSize: 36,
     fontWeight: '300',
     color: colors.slate[800],
-  },
-  sidesRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    width: '100%',
-  },
-  sideCard: {
-    flex: 1,
-    backgroundColor: colors.slate[50],
-    borderRadius: radii.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  sideCardActive: {
-    backgroundColor: colors.primary[50],
-  },
-  sideCardLabel: {
-    ...typography.caption,
-    color: colors.slate[500],
-  },
-  sideCardValue: {
-    ...typography.bodyBold,
-    color: colors.slate[400],
-  },
-  sideCardValueActive: {
-    color: colors.primary[600],
   },
   infoRow: {
     flexDirection: 'row',
@@ -741,6 +725,31 @@ const styles = StyleSheet.create({
     color: colors.slate[700],
     marginBottom: spacing.sm,
   },
+  sectionLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  babyChipsRow: {
+    gap: spacing.sm,
+  },
+  babyChip: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.full,
+    backgroundColor: colors.slate[100],
+  },
+  babyChipSelected: {
+    backgroundColor: sleepColors.main,
+  },
+  babyChipText: {
+    ...typography.smallBold,
+    color: colors.slate[600],
+  },
+  babyChipTextSelected: {
+    color: colors.white,
+  },
   notesContainer: {
     backgroundColor: colors.white,
     borderRadius: radii.md,
@@ -760,13 +769,36 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginTop: spacing.xs,
   },
+  photoThumb: {
+    width: 64,
+    height: 64,
+    borderRadius: radii.sm,
+    marginRight: spacing.sm,
+    position: 'relative',
+  },
+  photoImg: {
+    width: 64,
+    height: 64,
+    borderRadius: radii.sm,
+  },
+  photoRemove: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   saveBtn: {
-    backgroundColor: colors.primary[500],
+    backgroundColor: sleepColors.main,
     borderRadius: radii.lg,
     paddingVertical: spacing.lg,
     alignItems: 'center',
     marginTop: spacing.xxl,
-    ...shadows.primary,
+    ...shadows.md,
   },
   saveBtnDisabled: {
     opacity: 0.6,
@@ -805,36 +837,20 @@ const styles = StyleSheet.create({
     color: colors.slate[600],
     marginBottom: spacing.sm,
   },
-  modalSidesRow: {
+  modalDurationRow: {
     flexDirection: 'row',
     gap: spacing.md,
     marginBottom: spacing.md,
-  },
-  modalSideBox: {
-    flex: 1,
-    backgroundColor: colors.slate[50],
-    borderRadius: radii.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  modalSideLabel: {
-    ...typography.captionBold,
-    color: colors.slate[700],
-    textAlign: 'center',
-  },
-  modalTimeInputRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
+    justifyContent: 'center',
   },
   modalTimeField: {
     alignItems: 'center',
     gap: 2,
   },
   modalTimeInput: {
-    width: 52,
-    height: 40,
-    backgroundColor: colors.white,
+    width: 64,
+    height: 44,
+    backgroundColor: colors.slate[50],
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.slate[200],
@@ -851,18 +867,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    backgroundColor: colors.primary[50],
+    backgroundColor: sleepColors.light,
     borderRadius: radii.md,
     paddingVertical: spacing.sm,
     marginBottom: spacing.sm,
   },
   previewTotalLabel: {
     ...typography.small,
-    color: colors.primary[600],
+    color: sleepColors.main,
   },
   previewTotalValue: {
     ...typography.bodyBold,
-    color: colors.primary[600],
+    color: sleepColors.main,
   },
   modalTimesRow: {
     flexDirection: 'row',
@@ -891,17 +907,17 @@ const styles = StyleSheet.create({
   },
   previewRecalc: {
     ...typography.captionBold,
-    color: colors.primary[500],
+    color: sleepColors.main,
   },
   hintBox: {
-    backgroundColor: colors.primary[50],
+    backgroundColor: sleepColors.light,
     borderRadius: radii.md,
     padding: spacing.md,
     marginBottom: spacing.lg,
   },
   hintText: {
     ...typography.caption,
-    color: colors.primary[700],
+    color: sleepColors.main,
     lineHeight: 18,
   },
   modalActions: {
@@ -921,7 +937,7 @@ const styles = StyleSheet.create({
   },
   modalSaveBtn: {
     flex: 1,
-    backgroundColor: colors.primary[500],
+    backgroundColor: sleepColors.main,
     borderRadius: radii.md,
     paddingVertical: spacing.md,
     alignItems: 'center',

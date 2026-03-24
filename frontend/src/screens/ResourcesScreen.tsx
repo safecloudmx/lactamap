@@ -25,7 +25,7 @@ export default function ResourcesScreen() {
   const resources: ResourceItem[] = [
     {
       icon: Timer,
-      title: 'Cronometro de Lactancia',
+      title: 'Cronómetro de Lactancia',
       description: 'Mide el tiempo de toma para cada pecho de forma independiente.',
       color: colors.primary[500],
       bg: colors.primary[50],
@@ -34,40 +34,44 @@ export default function ResourcesScreen() {
     },
     {
       icon: ClipboardList,
-      title: 'Registro de Extraccion',
-      description: 'Lleva un historial de mililitros por sesion y seguimiento diario.',
+      title: 'Registro de Extracción',
+      description: 'Lleva un historial de mililitros por sesión y seguimiento diario.',
       color: colors.info,
       bg: colors.infoLight,
-      available: false,
+      available: true,
+      route: 'PumpingHistory',
     },
     {
       icon: Moon,
-      title: 'Temporizador de Sueno',
-      description: 'Controla las horas de descanso de tu bebe con alertas suaves.',
+      title: 'Temporizador de Sueño',
+      description: 'Controla las horas de descanso de tu bebé con alertas suaves.',
       color: '#7c3aed',
       bg: '#f5f3ff',
-      available: false,
+      available: true,
+      route: 'SleepTimer',
     },
     {
       icon: Baby,
-      title: 'Registro de Panales',
-      description: 'Anota los cambios de panal para llevar un control diario.',
-      color: colors.success,
-      bg: colors.successLight,
-      available: false,
+      title: 'Registro de Pañales',
+      description: 'Anota los cambios de pañal para llevar un control diario.',
+      color: '#0d9488',
+      bg: '#f0fdfa',
+      available: true,
+      route: 'DiaperLog',
     },
     {
       icon: Music,
       title: 'Sonidos Relajantes',
-      description: 'Musica suave y ruido blanco para acompanar la lactancia.',
+      description: 'Música suave y ruido blanco para acompañar la lactancia.',
       color: colors.warning,
       bg: colors.warningLight,
-      available: false,
+      available: true,
+      route: 'RelaxingSounds',
     },
     {
       icon: BookOpen,
-      title: 'Capsulas Informativas',
-      description: 'Guias y consejos sobre lactancia, nutricion y bienestar.',
+      title: 'Cápsulas Informativas',
+      description: 'Guías y consejos sobre lactancia, nutrición y bienestar.',
       color: '#0891b2',
       bg: '#ecfeff',
       available: false,
@@ -107,7 +111,7 @@ export default function ResourcesScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.subtitle}>
-          Herramientas de acompanamiento para ti y tu bebe. Nuevos recursos se iran agregando.
+          Herramientas de acompañamiento para ti y tu bebé. Nuevos recursos se irán agregando.
         </Text>
 
         {resources.map((resource, i) => (
@@ -128,7 +132,7 @@ export default function ResourcesScreen() {
                 {!resource.available && (
                   <View style={styles.comingSoonBadge}>
                     <Lock size={10} color={colors.slate[500]} />
-                    <Text style={styles.comingSoonText}>Proximamente</Text>
+                    <Text style={styles.comingSoonText}>Próximamente</Text>
                   </View>
                 )}
               </View>

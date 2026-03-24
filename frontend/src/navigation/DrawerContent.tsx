@@ -67,7 +67,7 @@ export default function DrawerContent({ navigation }: DrawerContentComponentProp
   ];
 
   const secondaryItems: MenuItem[] = [
-    { icon: Settings, label: 'Configuracion', route: 'Settings' },
+    { icon: Settings, label: 'Configuración', route: 'Settings' },
     { icon: Info, label: 'Acerca de', route: 'About' },
   ];
 

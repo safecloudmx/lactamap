@@ -116,11 +116,11 @@ export default function ProfileScreen() {
   const handleDeleteBaby = async (baby: Baby) => {
     const count = await nursingStorage.getSessionsCountByBabyId(baby.id);
     const warning = count > 0
-      ? `Se eliminaran tambien ${count} registro${count > 1 ? 's' : ''} de tomas asociado${count > 1 ? 's' : ''} a "${baby.name}". Esta accion no se puede deshacer.`
+      ? `Se eliminarán también ${count} registro${count > 1 ? 's' : ''} de tomas asociado${count > 1 ? 's' : ''} a "${baby.name}". Esta acción no se puede deshacer.`
       : `¿Eliminar a "${baby.name}" de la lista?`;
 
     confirmAlert(
-      'Eliminar bebe',
+      'Eliminar bebé',
       warning,
       async () => {
         if (count > 0) {
@@ -229,7 +229,7 @@ export default function ProfileScreen() {
             )}
             <TextInput
               style={styles.babyInput}
-              placeholder={isEditingBaby ? 'Nuevo nombre' : 'Nombre del bebe'}
+              placeholder={isEditingBaby ? 'Nuevo nombre' : 'Nombre del bebé'}
               placeholderTextColor={colors.slate[400]}
               value={babyName}
               onChangeText={setBabyName}
@@ -255,7 +255,7 @@ export default function ProfileScreen() {
           <View style={styles.emptyBabiesCard}>
             <BabyIcon size={32} color={colors.slate[300]} />
             <Text style={styles.emptyBabiesText}>
-              No tienes bebes registrados.{'\n'}Agrega uno para personalizar tus sesiones.
+              No tienes bebés registrados.{'\n'}Agrega uno para personalizar tus sesiones.
             </Text>
           </View>
         ) : (

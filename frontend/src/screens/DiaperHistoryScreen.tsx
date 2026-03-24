@@ -5,17 +5,31 @@ import {
 import { confirmAlert } from '../services/crossPlatformAlert';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, Clock, Trash2, CalendarDays } from 'lucide-react-native';
+import {
+  ArrowLeft, Trash2, CalendarDays, Baby as BabyIcon,
+} from 'lucide-react-native';
 import { colors, spacing, typography, radii, shadows } from '../theme';
-import { FeedingSession, Baby } from '../types';
-import { formatDuration } from '../hooks/useNursingTimer';
-import * as nursingStorage from '../services/nursingStorage';
+import { DiaperRecord, DiaperType, Baby } from '../types';
 import { EmptyState } from '../components/ui';
+import * as diaperStorage from '../services/diaperStorage';
 
-type Section = { title: string; data: FeedingSession[] };
+const diaperColors = {
+  main: '#0d9488',
+  light: '#f0fdfa',
+  medium: '#ccfbf1',
+  accent: '#5eead4',
+};
+
+type Section = { title: string; data: DiaperRecord[] };
 type DateFilter = 'all' | 'today' | 'week' | 'month';
 
-function formatSessionTime(isoString: string): string {
+const DIAPER_TYPE_LABELS: Record<DiaperType, string> = {
+  wet: 'Mojado',
+  dirty: 'Sucio',
+  both: 'Ambos',
+};
+
+function formatRecordTime(isoString: string): string {
   const d = new Date(isoString);
   return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true });
 }
@@ -23,27 +37,23 @@ function formatSessionTime(isoString: string): string {
 function getRelativeDateLabel(dateStr: string): string {
   const today = new Date();
   const date = new Date(dateStr);
-
   const todayStr = today.toISOString().slice(0, 10);
   const dateOnlyStr = date.toISOString().slice(0, 10);
-
   if (dateOnlyStr === todayStr) return 'Hoy';
-
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
   if (dateOnlyStr === yesterday.toISOString().slice(0, 10)) return 'Ayer';
-
   const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
   const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   return `${days[date.getDay()]} ${date.getDate()} ${months[date.getMonth()]}`;
 }
 
-function groupByDate(sessions: FeedingSession[]): Section[] {
-  const groups: Record<string, FeedingSession[]> = {};
-  for (const s of sessions) {
-    const key = new Date(s.startedAt).toISOString().slice(0, 10);
+function groupByDate(records: DiaperRecord[]): Section[] {
+  const groups: Record<string, DiaperRecord[]> = {};
+  for (const r of records) {
+    const key = new Date(r.changedAt).toISOString().slice(0, 10);
     if (!groups[key]) groups[key] = [];
-    groups[key].push(s);
+    groups[key].push(r);
   }
   return Object.entries(groups)
     .sort(([a], [b]) => b.localeCompare(a))
@@ -53,17 +63,11 @@ function groupByDate(sessions: FeedingSession[]): Section[] {
     }));
 }
 
-function getSideLabel(side: string): string {
-  if (side === 'left') return 'Izq';
-  if (side === 'right') return 'Der';
-  return 'Ambos';
-}
-
-export default function FeedingHistoryScreen() {
+export default function DiaperHistoryScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
 
-  const [sessions, setSessions] = useState<FeedingSession[]>([]);
+  const [records, setRecords] = useState<DiaperRecord[]>([]);
   const [babies, setBabies] = useState<Baby[]>([]);
   const [filterBabyId, setFilterBabyId] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
@@ -71,11 +75,11 @@ export default function FeedingHistoryScreen() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [sessionsData, babiesData] = await Promise.all([
-      nursingStorage.getSessions(),
-      nursingStorage.getBabies(),
+    const [recordsData, babiesData] = await Promise.all([
+      diaperStorage.getRecords(),
+      diaperStorage.getBabies(),
     ]);
-    setSessions(sessionsData);
+    setRecords(recordsData);
     setBabies(babiesData);
     setLoading(false);
   }, []);
@@ -86,11 +90,11 @@ export default function FeedingHistoryScreen() {
     }, [loadData])
   );
 
-  const filteredSessions = useMemo(() => {
-    let result = sessions;
+  const filteredRecords = useMemo(() => {
+    let result = records;
 
     if (filterBabyId) {
-      result = result.filter((s) => s.babyId === filterBabyId);
+      result = result.filter((r) => r.babyId === filterBabyId);
     }
 
     if (dateFilter !== 'all') {
@@ -106,49 +110,49 @@ export default function FeedingHistoryScreen() {
         cutoff = new Date(startOfToday);
         cutoff.setMonth(cutoff.getMonth() - 1);
       }
-      result = result.filter((s) => new Date(s.startedAt) >= cutoff);
+      result = result.filter((r) => new Date(r.changedAt) >= cutoff);
     }
 
     return result;
-  }, [sessions, filterBabyId, dateFilter]);
+  }, [records, filterBabyId, dateFilter]);
 
-  const sections = useMemo(() => groupByDate(filteredSessions), [filteredSessions]);
+  const sections = useMemo(() => groupByDate(filteredRecords), [filteredRecords]);
 
   const getBabyName = (babyId?: string) => {
     if (!babyId) return null;
     return babies.find((b) => b.id === babyId)?.name ?? null;
   };
 
-  const handleDelete = (session: FeedingSession) => {
+  const handleDelete = (record: DiaperRecord) => {
     confirmAlert(
-      'Eliminar sesión',
-      `¿Eliminar la sesión de ${formatSessionTime(session.startedAt)}?`,
+      'Eliminar registro',
+      `¿Eliminar el registro de ${formatRecordTime(record.changedAt)}?`,
       async () => {
-        await nursingStorage.deleteSession(session.id);
-        setSessions((prev) => prev.filter((s) => s.id !== session.id));
+        await diaperStorage.deleteRecord(record.id);
+        setRecords((prev) => prev.filter((r) => r.id !== record.id));
       }
     );
   };
 
-  const renderSession = ({ item }: { item: FeedingSession }) => {
+  const renderRecord = ({ item }: { item: DiaperRecord }) => {
     const babyName = getBabyName(item.babyId);
     return (
       <TouchableOpacity
-        style={styles.sessionCard}
-        onPress={() => navigation.navigate('FeedingSessionDetail', { sessionId: item.id })}
+        style={styles.recordCard}
+        onPress={() => navigation.navigate('DiaperRecordDetail', { recordId: item.id })}
         onLongPress={() => handleDelete(item)}
         activeOpacity={0.7}
       >
-        <View style={styles.sessionHeader}>
-          <View style={styles.sessionTimeRow}>
-            <Text style={styles.sessionEmoji}>🤱</Text>
+        <View style={styles.recordHeader}>
+          <View style={styles.recordTimeRow}>
+            <View style={styles.recordIcon}>
+              <BabyIcon size={16} color={diaperColors.main} />
+            </View>
             <View>
-              <Text style={styles.sessionTimeRange}>
-                {formatSessionTime(item.startedAt)} - {formatSessionTime(item.endedAt)}
+              <Text style={styles.recordTime}>
+                {formatRecordTime(item.changedAt)}
               </Text>
-              {babyName && (
-                <Text style={styles.sessionBaby}>{babyName}</Text>
-              )}
+              <Text style={styles.recordType}>{DIAPER_TYPE_LABELS[item.type]}</Text>
             </View>
           </View>
           <TouchableOpacity
@@ -159,35 +163,18 @@ export default function FeedingHistoryScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.sessionDetails}>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Duración</Text>
-            <Text style={styles.detailValue}>{formatDuration(item.totalDuration)}</Text>
-          </View>
-          <View style={styles.sidesRow}>
-            <View style={[styles.sideBadge, item.leftDuration > 0 && styles.sideBadgeActive]}>
-              <Text style={[styles.sideBadgeText, item.leftDuration > 0 && styles.sideBadgeTextActive]}>
-                Izq: {formatDuration(item.leftDuration)}
+        {(babyName || item.notes.length > 0) && (
+          <View style={styles.recordDetails}>
+            {babyName && (
+              <Text style={styles.recordBaby}>{babyName}</Text>
+            )}
+            {item.notes.length > 0 && (
+              <Text style={styles.recordNotes} numberOfLines={2}>
+                {item.notes}
               </Text>
-            </View>
-            <View style={[styles.sideBadge, item.rightDuration > 0 && styles.sideBadgeActive]}>
-              <Text style={[styles.sideBadgeText, item.rightDuration > 0 && styles.sideBadgeTextActive]}>
-                Der: {formatDuration(item.rightDuration)}
-              </Text>
-            </View>
+            )}
           </View>
-          {item.totalPauseTime > 0 && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Pausa</Text>
-              <Text style={styles.detailValueMuted}>{formatDuration(item.totalPauseTime)}</Text>
-            </View>
-          )}
-          {item.notes.length > 0 && (
-            <Text style={styles.sessionNotes} numberOfLines={2}>
-              {item.notes}
-            </Text>
-          )}
-        </View>
+        )}
       </TouchableOpacity>
     );
   };
@@ -206,7 +193,7 @@ export default function FeedingHistoryScreen() {
         >
           <ArrowLeft size={24} color={colors.slate[800]} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Historial de Lactancia</Text>
+        <Text style={styles.headerTitle}>Historial de Pañales</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -259,20 +246,20 @@ export default function FeedingHistoryScreen() {
         ))}
       </View>
 
-      {/* Sessions List */}
-      {!loading && filteredSessions.length === 0 ? (
+      {/* Records List */}
+      {!loading && filteredRecords.length === 0 ? (
         <View style={styles.emptyContainer}>
           <EmptyState
-            icon={<Clock size={48} color={colors.slate[300]} />}
-            title="Sin sesiones registradas"
-            subtitle="Las sesiones que registres en el cronómetro aparecerán aquí."
+            icon={<BabyIcon size={48} color={colors.slate[300]} />}
+            title="Sin registros"
+            subtitle="Los cambios de pañal que registres aparecerán aquí."
           />
         </View>
       ) : (
         <SectionList
           sections={sections}
           keyExtractor={(item) => item.id}
-          renderItem={renderSession}
+          renderItem={renderRecord}
           renderSectionHeader={renderSectionHeader}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
@@ -318,7 +305,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.slate[100],
   },
   filterChipSelected: {
-    backgroundColor: colors.primary[500],
+    backgroundColor: diaperColors.main,
+  },
+  filterChipText: {
+    ...typography.smallBold,
+    color: colors.slate[600],
+  },
+  filterChipTextSelected: {
+    color: colors.white,
   },
   dateFilterRow: {
     flexDirection: 'row',
@@ -339,8 +333,8 @@ const styles = StyleSheet.create({
     borderColor: colors.slate[200],
   },
   dateChipSelected: {
-    backgroundColor: colors.primary[500] + '15',
-    borderColor: colors.primary[500],
+    backgroundColor: diaperColors.main + '15',
+    borderColor: diaperColors.main,
   },
   dateChipText: {
     ...typography.caption,
@@ -348,15 +342,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   dateChipTextSelected: {
-    color: colors.primary[500],
+    color: diaperColors.main,
     fontWeight: '600',
-  },
-  filterChipText: {
-    ...typography.smallBold,
-    color: colors.slate[600],
-  },
-  filterChipTextSelected: {
-    color: colors.white,
   },
   listContent: {
     padding: spacing.lg,
@@ -368,81 +355,52 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
-  sessionCard: {
+  recordCard: {
     backgroundColor: colors.white,
     borderRadius: radii.lg,
     padding: spacing.lg,
     marginBottom: spacing.md,
     ...shadows.sm,
   },
-  sessionHeader: {
+  recordHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.md,
   },
-  sessionTimeRow: {
+  recordTimeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
   },
-  sessionEmoji: {
-    fontSize: 24,
+  recordIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: diaperColors.light,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  sessionTimeRange: {
+  recordTime: {
     ...typography.bodyBold,
     color: colors.slate[800],
   },
-  sessionBaby: {
+  recordType: {
     ...typography.caption,
-    color: colors.primary[500],
+    color: diaperColors.main,
     marginTop: 2,
   },
-  sessionDetails: {
-    gap: spacing.sm,
+  recordDetails: {
+    marginTop: spacing.sm,
+    gap: spacing.xs,
   },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  detailLabel: {
-    ...typography.small,
-    color: colors.slate[500],
-  },
-  detailValue: {
+  recordBaby: {
     ...typography.smallBold,
-    color: colors.slate[800],
+    color: colors.slate[600],
   },
-  detailValueMuted: {
-    ...typography.small,
-    color: colors.slate[500],
-  },
-  sidesRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  sideBadge: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.sm,
-    backgroundColor: colors.slate[100],
-  },
-  sideBadgeActive: {
-    backgroundColor: colors.primary[50],
-  },
-  sideBadgeText: {
-    ...typography.captionBold,
-    color: colors.slate[400],
-  },
-  sideBadgeTextActive: {
-    color: colors.primary[500],
-  },
-  sessionNotes: {
+  recordNotes: {
     ...typography.caption,
     color: colors.slate[500],
     fontStyle: 'italic',
-    marginTop: spacing.xs,
   },
   emptyContainer: {
     flex: 1,

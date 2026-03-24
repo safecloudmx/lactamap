@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  View, Text, TextInput, TouchableOpacity, StyleSheet, Image,
   Animated, Easing, KeyboardAvoidingView, Platform, ScrollView, Modal,
   TouchableWithoutFeedback, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import {
-  Baby, Mail, Lock, User as UserIcon, Eye, EyeOff,
+  Mail, Lock, User as UserIcon, Eye, EyeOff,
   AlertCircle, CheckCircle, X, ArrowLeft, KeyRound, ShieldCheck,
 } from 'lucide-react-native';
 import { colors, typography, spacing, radii, shadows } from '../theme';
@@ -312,9 +312,10 @@ export default function LoginScreen() {
       >
         {/* Brand */}
         <View style={styles.brandSection}>
-          <View style={styles.iconCircle}>
-            <Baby size={36} color={colors.white} />
-          </View>
+          <Image
+            source={require('../../assets/icon.png')}
+            style={styles.brandLogo}
+          />
           <Text style={styles.brandName}>LactaMap</Text>
           <Text style={styles.tagline}>Encuentra espacios seguros para ti y tu bebé</Text>
         </View>
@@ -661,11 +662,9 @@ const styles = StyleSheet.create({
     flexGrow: 1, paddingHorizontal: spacing.xxl, paddingBottom: spacing.xxxl,
   },
   brandSection: { alignItems: 'center', marginBottom: spacing.xxxl },
-  iconCircle: {
-    width: 72, height: 72, borderRadius: 36,
-    backgroundColor: colors.primary[500],
-    alignItems: 'center', justifyContent: 'center',
-    ...shadows.primary, marginBottom: spacing.lg,
+  brandLogo: {
+    width: 80, height: 80, borderRadius: 20,
+    marginBottom: spacing.lg,
   },
   brandName: { ...typography.h1, color: colors.primary[500], marginBottom: spacing.sm },
   tagline: { ...typography.small, color: colors.slate[500], textAlign: 'center' },

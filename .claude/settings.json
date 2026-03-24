@@ -3,5 +3,18 @@
     "allow": [
       "Bash(npm run:*)"
     ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"Stop\",\"additionalContext\":\"RECORDATORIO: Si hubo cambios significativos en esta sesión (nuevos archivos, rutas, modelos, pantallas, endpoints), actualiza CLAUDE.md antes de terminar.\"}}'",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
   }
 }

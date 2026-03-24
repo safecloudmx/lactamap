@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import prisma from '../lib/prisma';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../services/email.service';
+import { signUrl } from '../lib/s3';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
@@ -12,7 +13,7 @@ const LOCKOUT_MINUTES = 15;
 const RESET_TOKEN_EXPIRY_HOURS = 1;
 const VERIFY_OTP_EXPIRY_MINUTES = 15;
 
-function buildUserPayload(user: any) {
+async function buildUserPayload(user: any) {
   return {
     id: user.id,
     email: user.email,
@@ -20,6 +21,7 @@ function buildUserPayload(user: any) {
     role: user.role,
     points: user.points,
     level: Math.floor(Math.sqrt(user.points / 100)) + 1,
+    avatarUrl: await signUrl(user.avatarUrl),
     stats: { roomsAdded: 0, reviewsWritten: 0 },
   };
 }
@@ -100,7 +102,7 @@ const verifyEmail = async (req: Request, res: Response) => {
     if (u.emailVerified) {
       // Already verified — just log them in
       const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-      return res.json({ token, user: buildUserPayload(user) });
+      return res.json({ token, user: await buildUserPayload(user) });
     }
     if (!u.emailVerifyOtp || !u.emailVerifyExpiry) {
       return res.status(400).json({ error: 'No hay verificación pendiente', code: 'NO_PENDING_VERIFICATION' });
@@ -120,7 +122,7 @@ const verifyEmail = async (req: Request, res: Response) => {
     });
 
     const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: buildUserPayload(user) });
+    res.json({ token, user: await buildUserPayload(user) });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al verificar', code: 'SERVER_ERROR' });
@@ -238,7 +240,7 @@ const login = async (req: Request, res: Response) => {
     });
 
     const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: buildUserPayload(user) });
+    res.json({ token, user: await buildUserPayload(user) });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al iniciar sesión', code: 'SERVER_ERROR' });

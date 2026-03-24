@@ -112,6 +112,27 @@ export interface Baby {
 
 export type FeedingSide = 'left' | 'right' | 'both';
 
+export type PumpingSide = 'LEFT' | 'RIGHT' | 'BOTH';
+
+export interface PumpingPhoto {
+  id: string;
+  url: string;
+  createdAt: string;
+}
+
+export interface PumpingSession {
+  id: string;
+  userId: string;
+  babyId?: string | null;
+  side: PumpingSide;
+  pumpedAt: string;
+  amountMl: number;
+  notes: string | null;
+  photos: PumpingPhoto[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface FeedingSession {
   id: string;
   babyId?: string;
@@ -123,6 +144,34 @@ export interface FeedingSession {
   totalPauseTime: number;
   lastSide: FeedingSide;
   notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SleepSession {
+  id: string;
+  babyId?: string;
+  startedAt: string;
+  endedAt: string;
+  totalDuration: number;
+  totalPauseTime: number;
+  notes: string;
+  photos: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// === Diaper Record Types ===
+
+export type DiaperType = 'wet' | 'dirty' | 'both';
+
+export interface DiaperRecord {
+  id: string;
+  babyId?: string;
+  type: DiaperType;
+  changedAt: string;
+  notes: string;
+  photos: string[];
   createdAt: string;
   updatedAt: string;
 }

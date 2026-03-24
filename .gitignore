@@ -31,6 +31,9 @@ web-build/
 *.pk8
 *.keystore
 
+# Source assets (WAV originals, high-res images)
+resources/
+
 # Prisma
 /backend/prisma/migrations/
 lactamap_deploy_new

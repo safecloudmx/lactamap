@@ -70,7 +70,7 @@ export default function SettingsScreen() {
   return (
     <View style={styles.container}>
       <AppHeader
-        title="Configuracion"
+        title="Configuración"
         onBack={() => navigation.goBack()}
       />
 
@@ -106,7 +106,7 @@ export default function SettingsScreen() {
         </View>
 
         {/* Info Section */}
-        {renderSectionHeader('Informacion')}
+        {renderSectionHeader('Información')}
         <View style={styles.sectionCard}>
           {renderRow({
             icon: <Info size={20} color={colors.slate[500]} />,
@@ -116,13 +116,13 @@ export default function SettingsScreen() {
           <View style={styles.rowDivider} />
           {renderRow({
             icon: <FileText size={20} color={colors.slate[500]} />,
-            label: 'Terminos y Condiciones',
+            label: 'Términos y Condiciones',
             onPress: () => Linking.openURL('https://lactamap.app/terms'),
           })}
           <View style={styles.rowDivider} />
           {renderRow({
             icon: <Shield size={20} color={colors.slate[500]} />,
-            label: 'Politica de Privacidad',
+            label: 'Política de Privacidad',
             onPress: () => Linking.openURL('https://lactamap.app/privacy'),
           })}
         </View>

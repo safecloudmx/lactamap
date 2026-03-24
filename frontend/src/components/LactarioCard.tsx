@@ -50,7 +50,7 @@ export default function LactarioCard({ lactario, onPress, showStatus }: Lactario
         <View style={styles.row}>
           <MapPin size={14} color={colors.slate[400]} />
           <Text style={styles.address} numberOfLines={1}>
-            {lactario.address || 'Ubicacion no disponible'}
+            {lactario.address || 'Ubicación no disponible'}
           </Text>
         </View>
 

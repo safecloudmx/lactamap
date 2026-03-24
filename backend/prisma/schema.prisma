@@ -89,6 +89,7 @@ model User {
   reviews               Review[]
   babies                Baby[]
   nursingSessions       NursingSession[]
+  pumpingSessions       PumpingSession[]
   maintenanceReports    MaintenanceReport[]
   badges                UserBadge[]
   submissions           LactarioSubmission[]   @relation("SubmittedBy")
@@ -219,7 +220,8 @@ model Baby {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  nursingSessions NursingSession[]
+  nursingSessions  NursingSession[]
+  pumpingSessions  PumpingSession[]
 }
 
 model NursingSession {
@@ -303,4 +305,30 @@ model ModerationQueue {
   status          ModerationStatus     @default(PENDING)
   rejectionReason String?
   createdAt       DateTime             @default(now())
+}
+
+model PumpingSession {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  babyId    String?
+  baby      Baby?    @relation(fields: [babyId], references: [id])
+
+  side      String   // LEFT, RIGHT, BOTH
+  pumpedAt  DateTime
+  amountMl  Decimal  @default(0)
+  notes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  photos    PumpingPhoto[]
+}
+
+model PumpingPhoto {
+  id               String         @id @default(uuid())
+  pumpingSessionId String
+  pumpingSession   PumpingSession @relation(fields: [pumpingSessionId], references: [id], onDelete: Cascade)
+  url              String
+  createdAt        DateTime       @default(now())
 }

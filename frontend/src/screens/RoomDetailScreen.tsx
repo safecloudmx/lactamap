@@ -122,7 +122,7 @@ export default function RoomDetailScreen() {
 
   const handleSubmitReview = async () => {
     if (reviewRating === 0) {
-      Alert.alert('Error', 'Por favor selecciona una calificacion.');
+      Alert.alert('Error', 'Por favor selecciona una calificación.');
       return;
     }
     if (reviewComment.trim().length === 0) {
@@ -136,13 +136,13 @@ export default function RoomDetailScreen() {
         rating: reviewRating,
         comment: reviewComment.trim(),
       });
-      Alert.alert('Listo', 'Tu resena fue publicada.');
+      Alert.alert('Listo', 'Tu reseña fue publicada.');
       setShowReviewForm(false);
       setReviewRating(0);
       setReviewComment('');
       fetchDetails();
     } catch (error: any) {
-      Alert.alert('Error', error?.response?.data?.message || 'No se pudo enviar la resena.');
+      Alert.alert('Error', error?.response?.data?.message || 'No se pudo enviar la reseña.');
     } finally {
       setSubmitting(false);
     }
@@ -537,7 +537,7 @@ export default function RoomDetailScreen() {
           {/* Description */}
           {room.description && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Descripcion</Text>
+              <Text style={styles.sectionTitle}>Descripción</Text>
               <Text style={styles.description}>{room.description}</Text>
             </View>
           )}
@@ -593,7 +593,7 @@ export default function RoomDetailScreen() {
                   onPress={() => setShowReviewForm(true)}
                 >
                   <MessageSquare size={16} color={colors.primary[500]} />
-                  <Text style={styles.addReviewText}>Escribir resena</Text>
+                  <Text style={styles.addReviewText}>Escribir reseña</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -604,7 +604,7 @@ export default function RoomDetailScreen() {
                 <View style={styles.guestContent}>
                   <LogIn size={20} color={colors.slate[400]} />
                   <Text style={styles.guestText}>
-                    Inicia sesion para dejar una resena
+                    Inicia sesión para dejar una reseña
                   </Text>
                 </View>
               </Card>
@@ -614,7 +614,7 @@ export default function RoomDetailScreen() {
             {showReviewForm && (
               <Card style={styles.reviewFormCard}>
                 <View style={styles.reviewFormContent}>
-                  <Text style={styles.reviewFormTitle}>Tu calificacion</Text>
+                  <Text style={styles.reviewFormTitle}>Tu calificación</Text>
                   <Rating
                     value={reviewRating}
                     size={28}
@@ -667,7 +667,7 @@ export default function RoomDetailScreen() {
             {/* Review List */}
             {reviews.length === 0 && !showReviewForm && !isGuest && (
               <Text style={styles.noReviews}>
-                Aun no hay resenas. Se el primero en opinar.
+                Aún no hay reseñas. Sé el primero en opinar.
               </Text>
             )}
 

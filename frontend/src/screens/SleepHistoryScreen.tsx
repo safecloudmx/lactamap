@@ -5,14 +5,23 @@ import {
 import { confirmAlert } from '../services/crossPlatformAlert';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, Clock, Trash2, CalendarDays } from 'lucide-react-native';
+import {
+  ArrowLeft, Moon, Trash2, CalendarDays, Clock,
+} from 'lucide-react-native';
 import { colors, spacing, typography, radii, shadows } from '../theme';
-import { FeedingSession, Baby } from '../types';
-import { formatDuration } from '../hooks/useNursingTimer';
-import * as nursingStorage from '../services/nursingStorage';
+import { SleepSession, Baby } from '../types';
+import { formatDuration } from '../hooks/useSleepTimer';
 import { EmptyState } from '../components/ui';
+import * as sleepStorage from '../services/sleepStorage';
 
-type Section = { title: string; data: FeedingSession[] };
+const sleepColors = {
+  main: '#7c3aed',
+  light: '#f5f3ff',
+  medium: '#ede9fe',
+  accent: '#a78bfa',
+};
+
+type Section = { title: string; data: SleepSession[] };
 type DateFilter = 'all' | 'today' | 'week' | 'month';
 
 function formatSessionTime(isoString: string): string {
@@ -23,23 +32,19 @@ function formatSessionTime(isoString: string): string {
 function getRelativeDateLabel(dateStr: string): string {
   const today = new Date();
   const date = new Date(dateStr);
-
   const todayStr = today.toISOString().slice(0, 10);
   const dateOnlyStr = date.toISOString().slice(0, 10);
-
   if (dateOnlyStr === todayStr) return 'Hoy';
-
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
   if (dateOnlyStr === yesterday.toISOString().slice(0, 10)) return 'Ayer';
-
   const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
   const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   return `${days[date.getDay()]} ${date.getDate()} ${months[date.getMonth()]}`;
 }
 
-function groupByDate(sessions: FeedingSession[]): Section[] {
-  const groups: Record<string, FeedingSession[]> = {};
+function groupByDate(sessions: SleepSession[]): Section[] {
+  const groups: Record<string, SleepSession[]> = {};
   for (const s of sessions) {
     const key = new Date(s.startedAt).toISOString().slice(0, 10);
     if (!groups[key]) groups[key] = [];
@@ -53,17 +58,11 @@ function groupByDate(sessions: FeedingSession[]): Section[] {
     }));
 }
 
-function getSideLabel(side: string): string {
-  if (side === 'left') return 'Izq';
-  if (side === 'right') return 'Der';
-  return 'Ambos';
-}
-
-export default function FeedingHistoryScreen() {
+export default function SleepHistoryScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
 
-  const [sessions, setSessions] = useState<FeedingSession[]>([]);
+  const [sessions, setSessions] = useState<SleepSession[]>([]);
   const [babies, setBabies] = useState<Baby[]>([]);
   const [filterBabyId, setFilterBabyId] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
@@ -72,8 +71,8 @@ export default function FeedingHistoryScreen() {
   const loadData = useCallback(async () => {
     setLoading(true);
     const [sessionsData, babiesData] = await Promise.all([
-      nursingStorage.getSessions(),
-      nursingStorage.getBabies(),
+      sleepStorage.getSessions(),
+      sleepStorage.getBabies(),
     ]);
     setSessions(sessionsData);
     setBabies(babiesData);
@@ -119,29 +118,31 @@ export default function FeedingHistoryScreen() {
     return babies.find((b) => b.id === babyId)?.name ?? null;
   };
 
-  const handleDelete = (session: FeedingSession) => {
+  const handleDelete = (session: SleepSession) => {
     confirmAlert(
       'Eliminar sesión',
       `¿Eliminar la sesión de ${formatSessionTime(session.startedAt)}?`,
       async () => {
-        await nursingStorage.deleteSession(session.id);
+        await sleepStorage.deleteSession(session.id);
         setSessions((prev) => prev.filter((s) => s.id !== session.id));
       }
     );
   };
 
-  const renderSession = ({ item }: { item: FeedingSession }) => {
+  const renderSession = ({ item }: { item: SleepSession }) => {
     const babyName = getBabyName(item.babyId);
     return (
       <TouchableOpacity
         style={styles.sessionCard}
-        onPress={() => navigation.navigate('FeedingSessionDetail', { sessionId: item.id })}
+        onPress={() => navigation.navigate('SleepSessionDetail', { sessionId: item.id })}
         onLongPress={() => handleDelete(item)}
         activeOpacity={0.7}
       >
         <View style={styles.sessionHeader}>
           <View style={styles.sessionTimeRow}>
-            <Text style={styles.sessionEmoji}>🤱</Text>
+            <View style={styles.sessionIcon}>
+              <Moon size={16} color={sleepColors.main} />
+            </View>
             <View>
               <Text style={styles.sessionTimeRange}>
                 {formatSessionTime(item.startedAt)} - {formatSessionTime(item.endedAt)}
@@ -163,18 +164,6 @@ export default function FeedingHistoryScreen() {
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Duración</Text>
             <Text style={styles.detailValue}>{formatDuration(item.totalDuration)}</Text>
-          </View>
-          <View style={styles.sidesRow}>
-            <View style={[styles.sideBadge, item.leftDuration > 0 && styles.sideBadgeActive]}>
-              <Text style={[styles.sideBadgeText, item.leftDuration > 0 && styles.sideBadgeTextActive]}>
-                Izq: {formatDuration(item.leftDuration)}
-              </Text>
-            </View>
-            <View style={[styles.sideBadge, item.rightDuration > 0 && styles.sideBadgeActive]}>
-              <Text style={[styles.sideBadgeText, item.rightDuration > 0 && styles.sideBadgeTextActive]}>
-                Der: {formatDuration(item.rightDuration)}
-              </Text>
-            </View>
           </View>
           {item.totalPauseTime > 0 && (
             <View style={styles.detailRow}>
@@ -206,7 +195,7 @@ export default function FeedingHistoryScreen() {
         >
           <ArrowLeft size={24} color={colors.slate[800]} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Historial de Lactancia</Text>
+        <Text style={styles.headerTitle}>Historial de Sueño</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -263,9 +252,9 @@ export default function FeedingHistoryScreen() {
       {!loading && filteredSessions.length === 0 ? (
         <View style={styles.emptyContainer}>
           <EmptyState
-            icon={<Clock size={48} color={colors.slate[300]} />}
+            icon={<Moon size={48} color={colors.slate[300]} />}
             title="Sin sesiones registradas"
-            subtitle="Las sesiones que registres en el cronómetro aparecerán aquí."
+            subtitle="Las sesiones que registres en el temporizador aparecerán aquí."
           />
         </View>
       ) : (
@@ -318,7 +307,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.slate[100],
   },
   filterChipSelected: {
-    backgroundColor: colors.primary[500],
+    backgroundColor: sleepColors.main,
+  },
+  filterChipText: {
+    ...typography.smallBold,
+    color: colors.slate[600],
+  },
+  filterChipTextSelected: {
+    color: colors.white,
   },
   dateFilterRow: {
     flexDirection: 'row',
@@ -339,8 +335,8 @@ const styles = StyleSheet.create({
     borderColor: colors.slate[200],
   },
   dateChipSelected: {
-    backgroundColor: colors.primary[500] + '15',
-    borderColor: colors.primary[500],
+    backgroundColor: sleepColors.main + '15',
+    borderColor: sleepColors.main,
   },
   dateChipText: {
     ...typography.caption,
@@ -348,15 +344,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   dateChipTextSelected: {
-    color: colors.primary[500],
+    color: sleepColors.main,
     fontWeight: '600',
-  },
-  filterChipText: {
-    ...typography.smallBold,
-    color: colors.slate[600],
-  },
-  filterChipTextSelected: {
-    color: colors.white,
   },
   listContent: {
     padding: spacing.lg,
@@ -386,8 +375,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
   },
-  sessionEmoji: {
-    fontSize: 24,
+  sessionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: sleepColors.light,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sessionTimeRange: {
     ...typography.bodyBold,
@@ -395,7 +389,7 @@ const styles = StyleSheet.create({
   },
   sessionBaby: {
     ...typography.caption,
-    color: colors.primary[500],
+    color: sleepColors.main,
     marginTop: 2,
   },
   sessionDetails: {
@@ -417,26 +411,6 @@ const styles = StyleSheet.create({
   detailValueMuted: {
     ...typography.small,
     color: colors.slate[500],
-  },
-  sidesRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  sideBadge: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.sm,
-    backgroundColor: colors.slate[100],
-  },
-  sideBadgeActive: {
-    backgroundColor: colors.primary[50],
-  },
-  sideBadgeText: {
-    ...typography.captionBold,
-    color: colors.slate[400],
-  },
-  sideBadgeTextActive: {
-    color: colors.primary[500],
   },
   sessionNotes: {
     ...typography.caption,

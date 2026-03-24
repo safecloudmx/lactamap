@@ -103,7 +103,7 @@ export default function DashboardScreen() {
     {
       icon: Timer,
       title: 'Sesiones',
-      subtitle: 'Cronometro de lactancia',
+      subtitle: 'Cronómetro de lactancia',
       color: colors.info,
       bg: colors.infoLight,
       onPress: () => navigation.navigate('NursingTimer'),
@@ -111,7 +111,7 @@ export default function DashboardScreen() {
     {
       icon: ToolCaseIcon,
       title: 'Recursos',
-      subtitle: 'Guias y acompañamiento',
+      subtitle: 'Guías y acompañamiento',
       color: colors.success,
       bg: colors.successLight,
       onPress: () => navigation.navigate('Resources'),
@@ -133,7 +133,7 @@ export default function DashboardScreen() {
     {
       icon: Heart,
       title: 'Bienvenida a LactaMap',
-      body: 'Encuentra espacios seguros y comodos para ti y tu bebe. Tu comunidad te respalda.',
+      body: 'Encuentra espacios seguros y cómodos para ti y tu bebé. Tu comunidad te respalda.',
       color: colors.primary[500],
     },
     {
@@ -145,7 +145,7 @@ export default function DashboardScreen() {
     {
       icon: Shield,
       title: 'Tu privacidad es primero',
-      body: 'Tus datos de lactancia se guardan localmente. La sincronizacion es opcional.',
+      body: 'Tus datos de lactancia se guardan localmente. La sincronización es opcional.',
       color: colors.success,
     },
   ];
@@ -240,7 +240,7 @@ export default function DashboardScreen() {
 
         {/* Announcements */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Informacion</Text>
+          <Text style={styles.sectionTitle}>Información</Text>
           {announcements.map((a, i) => (
             <View key={i} style={styles.announcementCard}>
               <View style={[styles.announcementIcon, { backgroundColor: a.color + '15' }]}>

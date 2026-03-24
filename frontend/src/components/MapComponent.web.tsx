@@ -1,8 +1,8 @@
-import React, { useMemo, useRef, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import React, { useMemo, useRef, useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import { MapPin } from 'lucide-react-native';
 import { Lactario } from '../types';
-import { colors, spacing, typography, radii, shadows } from '../theme';
+import { colors, spacing, shadows, radii, typography } from '../theme';
 
 export interface ZoomTarget {
   lat: number;
@@ -16,11 +16,29 @@ interface MapComponentProps {
   zoomTarget?: ZoomTarget | null;
 }
 
+type FilterKey = 'LACTARIO' | 'CAMBIADOR' | 'BANO_FAMILIAR' | 'PUNTO_INTERES';
+
+const FILTER_ITEMS: { key: FilterKey; emoji: string; color: string }[] = [
+  { key: 'LACTARIO',      emoji: '🤱', color: '#f43f5e' },
+  { key: 'CAMBIADOR',     emoji: '🚼', color: '#8b5cf6' },
+  { key: 'BANO_FAMILIAR', emoji: '🚻', color: '#0d9488' },
+  { key: 'PUNTO_INTERES', emoji: '⭐', color: '#f59e0b' },
+];
+
+const ALL_ACTIVE: Record<FilterKey, boolean> = {
+  LACTARIO: true, CAMBIADOR: true, BANO_FAMILIAR: true, PUNTO_INTERES: true,
+};
+
 export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget }: MapComponentProps) {
   const iframeRef = useRef<any>(null);
-  const [visibleCounts, setVisibleCounts] = useState({ LACTARIO: 0, CAMBIADOR: 0, BANO_FAMILIAR: 0, PUNTO_INTERES: 0 });
+  const [visibleCounts, setVisibleCounts] = useState<Record<FilterKey, number>>({
+    LACTARIO: 0, CAMBIADOR: 0, BANO_FAMILIAR: 0, PUNTO_INTERES: 0,
+  });
+  const [activeFilters, setActiveFilters] = useState<Record<FilterKey, boolean>>(ALL_ACTIVE);
+  const activeFiltersRef = useRef(activeFilters);
 
-  // Post zoom command to Leaflet inside the iframe
+  useEffect(() => { activeFiltersRef.current = activeFilters; }, [activeFilters]);
+
   useEffect(() => {
     if (!zoomTarget || !iframeRef.current?.contentWindow) return;
     iframeRef.current.contentWindow.postMessage(
@@ -28,6 +46,14 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
       '*'
     );
   }, [zoomTarget]);
+
+  const handleFilterToggle = useCallback((key: FilterKey) => {
+    setActiveFilters(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      iframeRef.current?.contentWindow?.postMessage({ type: 'filterTypes', active: next }, '*');
+      return next;
+    });
+  }, []);
 
   const mapHtml = useMemo(() => {
     const PIN_COLORS: Record<string, string> = {
@@ -42,6 +68,7 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
       BANO_FAMILIAR: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M9 2a2 2 0 100 4 2 2 0 000-4zm6 0a2 2 0 100 4 2 2 0 000-4zM6 8v5h2v9h2v-5h2v5h2V13h2V8H6zm7 0v2h2V8h-2z"/></svg>`,
       PUNTO_INTERES: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`,
     };
+
     const markers = lactarios
       .filter((l) => l.latitude && l.longitude)
       .map((l) => {
@@ -53,7 +80,9 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
         const badgeLabel = pt === 'CAMBIADOR' ? '🚼 Cambiador' : pt === 'BANO_FAMILIAR' ? '🚻 Baño Familiar' : pt === 'PUNTO_INTERES' ? '⭐ Punto de Interés' : '🤱 Lactario';
         const priv = l.isPrivate === true;
         const pinClass = priv ? 'custom-pin pin-private' : 'custom-pin';
-        const privateBadge = priv ? `'<span style="font-size:11px;background:#eef2ff;color:#4338ca;padding:2px 8px;border-radius:99px;font-weight:700;margin-left:4px">🔒 Acceso Restringido</span>'+` : '';
+        const privateBadge = priv
+          ? `'<span style="font-size:11px;background:#eef2ff;color:#4338ca;padding:2px 8px;border-radius:99px;font-weight:700;margin-left:4px">🔒 Acceso Restringido</span>'+`
+          : '';
         return (
           `(function(){` +
           `var el=document.createElement('div');` +
@@ -69,9 +98,11 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
           `'<div style="color:#64748b;font-size:12px;margin-top:2px;margin-bottom:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${(l.description || '').replace(/'/g, "\\'").replace(/"/g, '&quot;')}</div>'+` +
           `'</div>'+` +
           `'</div>';` +
-          `L.marker([${l.latitude},${l.longitude}],{icon:icon}).addTo(map)` +
+          `var m=L.marker([${l.latitude},${l.longitude}],{icon:icon})` +
           `.bindPopup(popupContent,{offset:[0,0]})` +
           `.on('click',function(){window.parent.postMessage({type:'selectLactario',id:'${l.id}'},'*');});` +
+          `allMarkerObjects.push({type:'${pt}',marker:m});` +
+          `markerCluster.addLayer(m);` +
           `})()`
         );
       })
@@ -81,7 +112,10 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
 <html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"><\/script>
 <style>
   html, body, #map { margin:0; padding:0; width:100%; height:100%; }
   .pin-head {
@@ -124,6 +158,14 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
     0%  { transform:scale(0.3); opacity:0.7; }
     100%{ transform:scale(1);   opacity:0;   }
   }
+  .lactamap-cluster {
+    background:#f43f5e; border:3px solid #fff; border-radius:50%;
+    color:#fff; font-weight:700; font-family:sans-serif;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 2px 10px rgba(0,0,0,0.35);
+  }
+  .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large { background:transparent !important; }
+  .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div { background:transparent !important; }
 </style>
 </head><body>
 <div id="map"></div>
@@ -135,15 +177,34 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
     maxZoom: 19
   }).addTo(map);
 
+  var allMarkerObjects = [];
+  var _activeFilters = { LACTARIO: true, CAMBIADOR: true, BANO_FAMILIAR: true, PUNTO_INTERES: true };
+
+  var markerCluster = L.markerClusterGroup({
+    iconCreateFunction: function(cluster) {
+      var n = cluster.getChildCount();
+      var sz = n < 10 ? 36 : n < 100 ? 44 : 52;
+      var fs = n < 10 ? 13 : 15;
+      return L.divIcon({
+        html: '<div class="lactamap-cluster" style="width:'+sz+'px;height:'+sz+'px;font-size:'+fs+'px">'+n+'</div>',
+        className: '', iconSize: [sz, sz], iconAnchor: [sz/2, sz/2]
+      });
+    },
+    maxClusterRadius: 50,
+    spiderfyOnMaxZoom: true,
+    showCoverageOnHover: false,
+    zoomToBoundsOnClick: true
+  });
+  markerCluster.addTo(map);
+
   ${markers}
 
-  // Visible markers counter
   var _allMarkers = [${lactarios.filter(l => l.latitude && l.longitude).map(l => `[${l.latitude},${l.longitude},'${l.placeType || 'LACTARIO'}']`).join(',')}];
   function _updateCount() {
     var b = map.getBounds();
     var counts = { LACTARIO: 0, CAMBIADOR: 0, BANO_FAMILIAR: 0, PUNTO_INTERES: 0 };
     _allMarkers.forEach(function(m) {
-      if (b.contains([m[0], m[1]])) { counts[m[2]] = (counts[m[2]] || 0) + 1; }
+      if (_activeFilters[m[2]] && b.contains([m[0], m[1]])) { counts[m[2]] = (counts[m[2]]||0)+1; }
     });
     window.parent.postMessage({ type: 'visibleCounts', counts: counts }, '*');
   }
@@ -151,29 +212,29 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
   map.on('zoomend', _updateCount);
   setTimeout(_updateCount, 800);
 
-  // Listen for commands from the React parent (zoom, recount, etc.)
   window.addEventListener('message', function(e) {
     if (!e.data || !e.data.type) return;
-    if (e.data.type === 'zoomTo') {
-      map.setView([e.data.lat, e.data.lng], e.data.zoom || 14);
-    }
-    if (e.data.type === 'recount') {
+    if (e.data.type === 'zoomTo') { map.setView([e.data.lat, e.data.lng], e.data.zoom||14); }
+    if (e.data.type === 'recount') { _updateCount(); }
+    if (e.data.type === 'filterTypes') {
+      _activeFilters = e.data.active;
+      markerCluster.clearLayers();
+      allMarkerObjects.forEach(function(m) {
+        if (_activeFilters[m.type]) { markerCluster.addLayer(m.marker); }
+      });
       _updateCount();
     }
   });
 
-  // Request user location
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       function(pos) {
-        var lat = pos.coords.latitude;
-        var lng = pos.coords.longitude;
+        var lat = pos.coords.latitude, lng = pos.coords.longitude;
         map.setView([lat, lng], 16);
         var userIcon = L.divIcon({
           className: '',
           html: '<div class="user-location-wrap"><div class="user-pulse"></div><div class="user-dot"></div></div>',
-          iconSize: [60, 60],
-          iconAnchor: [30, 30]
+          iconSize: [60, 60], iconAnchor: [30, 30]
         });
         L.marker([lat, lng], { icon: userIcon, zIndexOffset: 1000 }).addTo(map);
       },
@@ -185,8 +246,6 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
 </body></html>`;
   }, [lactarios]);
 
-  // Reset counts when lactarios change; iframe's _updateCount will send
-  // viewport-based counts ~800ms after reload, overriding these totals.
   useEffect(() => {
     const counts = { LACTARIO: 0, CAMBIADOR: 0, BANO_FAMILIAR: 0, PUNTO_INTERES: 0 } as Record<string, number>;
     lactarios.forEach((l) => {
@@ -195,9 +254,10 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
     });
     setVisibleCounts(counts as any);
 
-    // After the iframe reloads with new markers, nudge it to recount
     const timer = setTimeout(() => {
+      const af = activeFiltersRef.current;
       iframeRef.current?.contentWindow?.postMessage({ type: 'recount' }, '*');
+      iframeRef.current?.contentWindow?.postMessage({ type: 'filterTypes', active: af }, '*');
     }, 1000);
     return () => clearTimeout(timer);
   }, [lactarios]);
@@ -234,22 +294,29 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
         </View>
       )}
 
-      <View style={styles.countBadgeWrapper}>
-        <View style={styles.countBadge}>
-          {[
-            { key: 'LACTARIO', emoji: '🤱', color: '#f43f5e' },
-            { key: 'CAMBIADOR', emoji: '🚼', color: '#8b5cf6' },
-            { key: 'BANO_FAMILIAR', emoji: '🚻', color: '#0d9488' },
-            { key: 'PUNTO_INTERES', emoji: '⭐', color: '#f59e0b' },
-          ].map((item, i, arr) => (
+      <View pointerEvents="box-none" style={styles.filterBarWrapper}>
+        <View style={styles.filterBar}>
+          {FILTER_ITEMS.map((item, i, arr) => (
             <React.Fragment key={item.key}>
-              <View style={styles.countItem}>
-                <Text style={styles.countEmoji}>{item.emoji}</Text>
-                <Text style={[styles.countNum, { color: item.color }]}>
-                  {(visibleCounts as any)[item.key] || 0}
+              <TouchableOpacity
+                style={styles.filterChip}
+                onPress={() => handleFilterToggle(item.key)}
+                activeOpacity={0.7}
+              >
+                <View style={[
+                  styles.filterCheckbox,
+                  activeFilters[item.key] && { backgroundColor: item.color, borderColor: item.color },
+                ]}>
+                  {activeFilters[item.key] && <Text style={styles.checkmark}>✓</Text>}
+                </View>
+                <Text style={[styles.chipEmoji, !activeFilters[item.key] && styles.dimmed]}>
+                  {item.emoji}
                 </Text>
-              </View>
-              {i < arr.length - 1 && <View style={styles.countSeparator} />}
+                <Text style={[styles.chipCount, { color: activeFilters[item.key] ? item.color : colors.slate[300] }]}>
+                  {visibleCounts[item.key] || 0}
+                </Text>
+              </TouchableOpacity>
+              {i < arr.length - 1 && <View style={styles.separator} />}
             </React.Fragment>
           ))}
         </View>
@@ -262,26 +329,52 @@ const styles = StyleSheet.create({
   container: { flex: 1, position: 'relative' },
   fallback: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   fallbackText: { ...typography.body, color: colors.slate[400] },
-  countBadgeWrapper: {
-    position: 'absolute', bottom: spacing.lg,
-    left: 0, right: 0,
+  filterBarWrapper: {
+    position: 'absolute',
+    bottom: spacing.lg,
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    pointerEvents: 'none' as any,
   },
-  countBadge: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    borderRadius: radii.full, ...shadows.md,
-    gap: spacing.sm,
+  filterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radii.full,
+    ...shadows.md,
+    gap: spacing.xs,
   },
-  countItem: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 3,
+    borderRadius: radii.sm,
   },
-  countEmoji: { fontSize: 12 },
-  countNum: { fontSize: 13, fontWeight: '700' },
-  countSeparator: {
-    width: 1, height: 14,
+  filterCheckbox: {
+    width: 15,
+    height: 15,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: colors.slate[300],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkmark: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '700',
+    lineHeight: 12,
+  },
+  dimmed: { opacity: 0.35 },
+  chipEmoji: { fontSize: 13 },
+  chipCount: { fontSize: 13, fontWeight: '700' },
+  separator: {
+    width: 1,
+    height: 16,
     backgroundColor: colors.slate[200],
   },
 });

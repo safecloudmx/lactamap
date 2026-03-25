@@ -36,7 +36,17 @@ interface Submission {
   rejectionNotes?: string;
   createdAt: string;
   reviewedAt?: string;
-  lactario: { id: string; name: string; address?: string; description?: string };
+  lactario: {
+    id: string;
+    name: string;
+    address?: string;
+    description?: string;
+    floor?: string;
+    parentId?: string;
+    placeType?: string;
+    genderAccess?: string;
+    isPrivate?: boolean;
+  };
   submittedBy: { id: string; name?: string; email: string; role: string };
   reviewedBy?: { id: string; name?: string; email: string };
 }
@@ -195,18 +205,51 @@ export default function AdminReviewScreen() {
     catch { return iso; }
   };
 
+  const getPlaceTypeLabel = (pt?: string) => {
+    if (pt === 'CAMBIADOR') return '🚼 Cambiador';
+    if (pt === 'BANO_FAMILIAR') return '🚻 Baño Familiar';
+    if (pt === 'PUNTO_INTERES') return '⭐ Punto de Interés';
+    return '🤱 Lactario';
+  };
+
   const renderSubmission = ({ item }: { item: Submission }) => {
     const submitterName = item.submittedBy.name || item.submittedBy.email.split('@')[0];
+    const isFloor = !!item.lactario.parentId;
+    const displayName = isFloor
+      ? `${item.lactario.name} — Piso ${item.lactario.floor || '?'}`
+      : item.lactario.name;
+
     return (
-      <View style={styles.card}>
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={0.7}
+        onPress={() => navigation.navigate('RoomDetail', { room: { id: item.lactario.id, name: item.lactario.name, floor: item.lactario.floor, status: item.status } })}
+      >
         <View style={styles.cardHeader}>
           <View style={styles.cardTitleRow}>
             <MapPin size={14} color={colors.primary[500]} />
-            <Text style={styles.cardTitle} numberOfLines={1}>{item.lactario.name}</Text>
+            <Text style={styles.cardTitle} numberOfLines={1}>{displayName}</Text>
           </View>
           <StatusBadge status={item.status} />
         </View>
         {item.lactario.address ? <Text style={styles.address} numberOfLines={1}>{item.lactario.address}</Text> : null}
+
+        {/* Floor details */}
+        {isFloor && (
+          <View style={styles.floorDetailBox}>
+            <Text style={styles.floorDetailLabel}>Tipo: <Text style={styles.floorDetailValue}>{getPlaceTypeLabel(item.lactario.placeType)}</Text></Text>
+            {item.lactario.description ? (
+              <Text style={styles.floorDetailLabel}>Descripción: <Text style={styles.floorDetailValue}>{item.lactario.description}</Text></Text>
+            ) : null}
+            {item.lactario.genderAccess ? (
+              <Text style={styles.floorDetailLabel}>Acceso: <Text style={styles.floorDetailValue}>{item.lactario.genderAccess}</Text></Text>
+            ) : null}
+            {item.lactario.isPrivate && (
+              <Text style={styles.floorDetailLabel}>🔒 <Text style={styles.floorDetailValue}>Acceso restringido</Text></Text>
+            )}
+          </View>
+        )}
+
         <View style={styles.metaRow}>
           <User size={12} color={colors.slate[400]} />
           <Text style={styles.metaText}>
@@ -229,7 +272,7 @@ export default function AdminReviewScreen() {
         )}
         {item.status === 'PENDING' && (
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.approveBtn} onPress={() => handleApproveSubmission(item.id, item.lactario.name)} disabled={approvingId === item.id}>
+            <TouchableOpacity style={styles.approveBtn} onPress={() => handleApproveSubmission(item.id, displayName)} disabled={approvingId === item.id}>
               {approvingId === item.id
                 ? <ActivityIndicator size="small" color={colors.white} />
                 : <><CheckCircle size={16} color={colors.white} /><Text style={styles.approveBtnText}>Aprobar</Text></>
@@ -241,7 +284,7 @@ export default function AdminReviewScreen() {
             </TouchableOpacity>
           </View>
         )}
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -597,7 +640,7 @@ const sBadge = StyleSheet.create({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.slate[50] },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  sectionScroll: { backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.slate[100] },
+  sectionScroll: { backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.slate[100], flexGrow: 0 },
   sectionRow: {
     flexDirection: 'row',
   },
@@ -638,6 +681,9 @@ const styles = StyleSheet.create({
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flex: 1, marginRight: spacing.sm },
   cardTitle: { ...typography.smallBold, color: colors.slate[800], flex: 1 },
   address: { ...typography.caption, color: colors.slate[500], marginBottom: spacing.sm },
+  floorDetailBox: { backgroundColor: '#f0f9ff', borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm, gap: 2 },
+  floorDetailLabel: { ...typography.caption, color: colors.slate[500] },
+  floorDetailValue: { color: colors.slate[700], fontWeight: '600' },
   changesBox: { backgroundColor: colors.slate[50], borderRadius: radii.sm, padding: spacing.sm, marginBottom: spacing.sm },
   changesLabel: { ...typography.caption, color: colors.slate[500], fontWeight: '600', marginBottom: 4 },
   changeItem: { ...typography.caption, color: colors.slate[700] },

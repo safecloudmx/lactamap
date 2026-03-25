@@ -25,6 +25,9 @@ export default function AddFloorScreen() {
   const parentId: string = route.params?.parentId;
   const parentName: string = route.params?.parentName || 'Edificio';
 
+  const AUTO_APPROVE_ROLES = ['ADMIN', 'DISTINGUISHED', 'ELITE'];
+  const canAutoApprove = user?.role && AUTO_APPROVE_ROLES.includes(user.role);
+
   const [placeType, setPlaceType] = useState<PlaceType | null>(null);
   const [floor, setFloor] = useState('');
   const [description, setDescription] = useState('');
@@ -89,22 +92,22 @@ export default function AddFloorScreen() {
       if (Platform.OS === 'web') {
         navigation.goBack();
         Alert.alert(
-          result.requiresReview ? 'Solicitud enviada' : 'Piso agregado',
+          result.requiresReview ? 'Solicitud enviada' : 'Espacio agregado',
           result.requiresReview
-            ? 'Tu piso fue enviado y será publicado tras ser aprobado.'
-            : 'El piso fue publicado exitosamente.'
+            ? 'Tu solicitud fue enviada y será revisada por los moderadores para autorizar el espacio.'
+            : 'El espacio fue publicado exitosamente.'
         );
       } else {
         Alert.alert(
-          result.requiresReview ? 'Enviado para revisión' : '¡Publicado!',
+          result.requiresReview ? 'Solicitud enviada' : '¡Publicado!',
           result.requiresReview
-            ? 'Tu piso fue enviado y será publicado tras ser aprobado.'
-            : 'El piso fue publicado exitosamente.',
+            ? 'Tu solicitud fue enviada y será revisada por los moderadores para autorizar el espacio.'
+            : 'El espacio fue publicado exitosamente.',
           [{ text: 'OK', onPress: () => navigation.goBack() }]
         );
       }
     } catch (error: any) {
-      Alert.alert('Error', error?.response?.data?.error || 'No se pudo agregar el piso.');
+      Alert.alert('Error', error?.response?.data?.error || 'No se pudo agregar el espacio.');
     } finally {
       setIsSaving(false);
     }
@@ -113,7 +116,7 @@ export default function AddFloorScreen() {
   return (
     <View style={styles.container}>
       <AppHeader
-        title="Agregar piso"
+        title="Agregar espacio"
         subtitle={parentName}
         onBack={() => navigation.goBack()}
       />
@@ -179,7 +182,7 @@ export default function AddFloorScreen() {
           <Text style={styles.label}>Descripción (opcional)</Text>
           <TextInput
             style={[styles.input, styles.textArea]}
-            placeholder="Describe este piso..."
+            placeholder="Describe este espacio..."
             placeholderTextColor={colors.slate[400]}
             value={description}
             onChangeText={setDescription}
@@ -306,17 +309,17 @@ export default function AddFloorScreen() {
           activeOpacity={0.8}
         >
           {isSaving ? (
-            <Text style={styles.saveBtnText}>Guardando...</Text>
+            <Text style={styles.saveBtnText}>{canAutoApprove ? 'Guardando...' : 'Enviando...'}</Text>
           ) : (
             <>
               <Check size={20} color={colors.white} />
-              <Text style={styles.saveBtnText}>Agregar piso</Text>
+              <Text style={styles.saveBtnText}>{canAutoApprove ? 'Agregar espacio' : 'Enviar solicitud'}</Text>
             </>
           )}
         </TouchableOpacity>
       </View>
 
-      {isSaving && <LoadingOverlay message="Guardando piso..." />}
+      {isSaving && <LoadingOverlay message={canAutoApprove ? 'Guardando espacio...' : 'Enviando solicitud...'} />}
     </View>
   );
 }

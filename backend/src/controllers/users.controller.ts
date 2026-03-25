@@ -66,6 +66,7 @@ export const usersController = {
       if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
       const webpBuffer = await sharp(req.file.buffer)
+        .rotate() // auto-rotate based on EXIF orientation
         .resize(400, 400, { fit: 'cover' })
         .webp({ quality: 85 })
         .toBuffer();

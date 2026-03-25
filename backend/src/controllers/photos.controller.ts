@@ -19,6 +19,7 @@ export const photosController = {
 
       // Resize and convert to WebP
       const webpBuffer = await sharp(req.file.buffer)
+        .rotate() // auto-rotate based on EXIF orientation
         .resize(1200, 800, { fit: 'inside', withoutEnlargement: true })
         .webp({ quality: 80 })
         .toBuffer();

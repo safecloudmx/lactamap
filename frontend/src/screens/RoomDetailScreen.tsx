@@ -448,7 +448,9 @@ export default function RoomDetailScreen() {
         <View style={styles.body}>
           {/* Title + Rating */}
           <View style={styles.titleRow}>
-            <Text style={styles.roomName}>{room.name}</Text>
+            <Text style={styles.roomName}>
+              {room.floor ? `${room.name} — Piso ${room.floor}` : room.name}
+            </Text>
             <View style={styles.ratingBadge}>
               <Rating value={room.rating || 0} size={16} />
               <Text style={styles.ratingValue}>{(room.rating || 0).toFixed(1)}</Text>
@@ -613,52 +615,51 @@ export default function RoomDetailScreen() {
             </TouchableOpacity>
           )}
 
-          {/* Floors Section */}
+          {/* Floors / Spaces Section */}
           {room.floors && room.floors.length > 0 && (
             <View style={styles.section}>
               <View style={styles.floorsHeader}>
                 <Layers size={18} color={colors.slate[700]} />
-                <Text style={styles.sectionTitle}>Pisos ({room.floors.length})</Text>
+                <Text style={styles.sectionTitle}>Espacios ({room.floors.length})</Text>
               </View>
-              {room.floors.map((floor: LactarioFloor) => (
-                <TouchableOpacity
-                  key={floor.id}
-                  style={styles.floorCard}
-                  onPress={() => navigation.push('RoomDetail', { room: { id: floor.id, name: `${room.name} — ${floor.floor}`, status: 'ACTIVE' } })}
-                  activeOpacity={0.7}
-                >
-                  {floor.imageUrl ? (
-                    <Image source={{ uri: floor.imageUrl }} style={styles.floorThumb} />
-                  ) : (
-                    <View style={[styles.floorThumb, styles.floorThumbPlaceholder]}>
-                      <Layers size={20} color={colors.slate[300]} />
-                    </View>
-                  )}
-                  <View style={styles.floorInfo}>
-                    <Text style={styles.floorName}>Piso {floor.floor}</Text>
-                    {floor.description && (
-                      <Text style={styles.floorDesc} numberOfLines={1}>{floor.description}</Text>
+              {room.floors.map((floor: LactarioFloor) => {
+                const floorTypeLabel =
+                  floor.placeType === 'CAMBIADOR' ? '🚼 Cambiador'
+                  : floor.placeType === 'BANO_FAMILIAR' ? '🚻 Baño Familiar'
+                  : floor.placeType === 'PUNTO_INTERES' ? '⭐ Punto de Interés'
+                  : '🤱 Lactario';
+                return (
+                  <TouchableOpacity
+                    key={floor.id}
+                    style={styles.floorCard}
+                    onPress={() => navigation.push('RoomDetail', { room: { id: floor.id, name: room.name, floor: floor.floor, status: 'ACTIVE' } })}
+                    activeOpacity={0.7}
+                  >
+                    {floor.imageUrl ? (
+                      <Image source={{ uri: floor.imageUrl }} style={styles.floorThumb} />
+                    ) : (
+                      <View style={[styles.floorThumb, styles.floorThumbPlaceholder]}>
+                        <Layers size={20} color={colors.slate[300]} />
+                      </View>
                     )}
-                    <View style={styles.floorMeta}>
-                      {floor.placeType && (
-                        <Text style={styles.floorMetaText}>
-                          {floor.placeType === 'CAMBIADOR' ? '🚼 Cambiador'
-                            : floor.placeType === 'BANO_FAMILIAR' ? '🚻 Baño Familiar'
-                            : floor.placeType === 'PUNTO_INTERES' ? '⭐ POI'
-                            : '🤱 Lactario'}
-                        </Text>
+                    <View style={styles.floorInfo}>
+                      <Text style={styles.floorName}>Piso {floor.floor} — {floorTypeLabel}</Text>
+                      {floor.description && (
+                        <Text style={styles.floorDesc} numberOfLines={1}>{floor.description}</Text>
                       )}
-                      {(floor.rating ?? 0) > 0 && (
-                        <Text style={styles.floorMetaText}>⭐ {(floor.rating ?? 0).toFixed(1)}</Text>
-                      )}
-                      {(floor.reviewCount ?? 0) > 0 && (
-                        <Text style={styles.floorMetaText}>{floor.reviewCount} reseña{floor.reviewCount !== 1 ? 's' : ''}</Text>
-                      )}
+                      <View style={styles.floorMeta}>
+                        {(floor.rating ?? 0) > 0 && (
+                          <Text style={styles.floorMetaText}>⭐ {(floor.rating ?? 0).toFixed(1)}</Text>
+                        )}
+                        {(floor.reviewCount ?? 0) > 0 && (
+                          <Text style={styles.floorMetaText}>{floor.reviewCount} reseña{floor.reviewCount !== 1 ? 's' : ''}</Text>
+                        )}
+                      </View>
                     </View>
-                  </View>
-                  <ChevronRight size={18} color={colors.slate[400]} />
-                </TouchableOpacity>
-              ))}
+                    <ChevronRight size={18} color={colors.slate[400]} />
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           )}
 
@@ -670,7 +671,7 @@ export default function RoomDetailScreen() {
               activeOpacity={0.7}
             >
               <Plus size={18} color={colors.primary[500]} />
-              <Text style={styles.addFloorBtnText}>Agregar piso</Text>
+              <Text style={styles.addFloorBtnText}>Agregar espacio</Text>
             </TouchableOpacity>
           )}
 

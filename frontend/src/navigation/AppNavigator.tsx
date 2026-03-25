@@ -34,6 +34,7 @@ import DiaperLogScreen from '../screens/DiaperLogScreen';
 import DiaperHistoryScreen from '../screens/DiaperHistoryScreen';
 import DiaperRecordDetailScreen from '../screens/DiaperRecordDetailScreen';
 import RelaxingSoundsScreen from '../screens/RelaxingSoundsScreen';
+import AddFloorScreen from '../screens/AddFloorScreen';
 
 import CustomTabBar from '../components/CustomTabBar';
 import DrawerContent from './DrawerContent';
@@ -187,6 +188,11 @@ export const AppNavigator = () => {
               name="RelaxingSounds"
               component={RelaxingSoundsScreen}
               options={{ presentation: 'card' }}
+            />
+            <Stack.Screen
+              name="AddFloor"
+              component={AddFloorScreen}
+              options={{ presentation: 'modal' }}
             />
             <Stack.Screen
               name="EditRoom"

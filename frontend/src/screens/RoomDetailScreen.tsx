@@ -46,8 +46,12 @@ import {
   X,
   ShieldCheck,
   ShieldOff,
+  Layers,
+  Plus,
+  ChevronRight,
+  Building2,
 } from 'lucide-react-native';
-import { Lactario, Review } from '../types';
+import { Lactario, LactarioFloor, Review } from '../types';
 import { getLactarioById, getReviews, createReview, updateReview, deleteReview, reportReview, deleteLactario, verifyLactario, unverifyLactario } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Rating, Card, AvatarInitials, PlaceholderImage } from '../components/ui';
@@ -589,6 +593,80 @@ export default function RoomDetailScreen() {
                 ))}
               </View>
             </View>
+          )}
+
+          {/* Parent link (for child/floor lactarios) */}
+          {room.parent && (
+            <TouchableOpacity
+              style={styles.parentLink}
+              onPress={() => navigation.push('RoomDetail', { room: { id: room.parent!.id, name: room.parent!.name, address: room.parent!.address, latitude: room.parent!.latitude, longitude: room.parent!.longitude, status: 'ACTIVE' } })}
+              activeOpacity={0.6}
+            >
+              <Building2 size={16} color={colors.primary[500]} />
+              <Text style={styles.parentLinkText}>Ver edificio: {room.parent.name}</Text>
+              <ChevronRight size={16} color={colors.primary[500]} />
+            </TouchableOpacity>
+          )}
+
+          {/* Floors Section */}
+          {room.floors && room.floors.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.floorsHeader}>
+                <Layers size={18} color={colors.slate[700]} />
+                <Text style={styles.sectionTitle}>Pisos ({room.floors.length})</Text>
+              </View>
+              {room.floors.map((floor: LactarioFloor) => (
+                <TouchableOpacity
+                  key={floor.id}
+                  style={styles.floorCard}
+                  onPress={() => navigation.push('RoomDetail', { room: { id: floor.id, name: `${room.name} — ${floor.floor}`, status: 'ACTIVE' } })}
+                  activeOpacity={0.7}
+                >
+                  {floor.imageUrl ? (
+                    <Image source={{ uri: floor.imageUrl }} style={styles.floorThumb} />
+                  ) : (
+                    <View style={[styles.floorThumb, styles.floorThumbPlaceholder]}>
+                      <Layers size={20} color={colors.slate[300]} />
+                    </View>
+                  )}
+                  <View style={styles.floorInfo}>
+                    <Text style={styles.floorName}>Piso {floor.floor}</Text>
+                    {floor.description && (
+                      <Text style={styles.floorDesc} numberOfLines={1}>{floor.description}</Text>
+                    )}
+                    <View style={styles.floorMeta}>
+                      {floor.placeType && (
+                        <Text style={styles.floorMetaText}>
+                          {floor.placeType === 'CAMBIADOR' ? '🚼 Cambiador'
+                            : floor.placeType === 'BANO_FAMILIAR' ? '🚻 Baño Familiar'
+                            : floor.placeType === 'PUNTO_INTERES' ? '⭐ POI'
+                            : '🤱 Lactario'}
+                        </Text>
+                      )}
+                      {(floor.rating ?? 0) > 0 && (
+                        <Text style={styles.floorMetaText}>⭐ {(floor.rating ?? 0).toFixed(1)}</Text>
+                      )}
+                      {(floor.reviewCount ?? 0) > 0 && (
+                        <Text style={styles.floorMetaText}>{floor.reviewCount} reseña{floor.reviewCount !== 1 ? 's' : ''}</Text>
+                      )}
+                    </View>
+                  </View>
+                  <ChevronRight size={18} color={colors.slate[400]} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {/* Add Floor Button (for parent lactarios without parentId) */}
+          {!room.parentId && !isGuest && canEdit && (
+            <TouchableOpacity
+              style={styles.addFloorBtn}
+              onPress={() => navigation.navigate('AddFloor', { parentId: room.id, parentName: room.name })}
+              activeOpacity={0.7}
+            >
+              <Plus size={18} color={colors.primary[500]} />
+              <Text style={styles.addFloorBtnText}>Agregar piso</Text>
+            </TouchableOpacity>
           )}
 
           {/* Reviews Section */}
@@ -1313,5 +1391,79 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: spacing.md,
+  },
+  parentLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: radii.lg,
+  },
+  parentLinkText: {
+    ...typography.smallBold,
+    color: colors.primary[500],
+    flex: 1,
+  },
+  floorsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  floorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderRadius: radii.lg,
+    padding: spacing.md,
+    gap: spacing.md,
+    ...shadows.sm,
+  },
+  floorThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: radii.md,
+  },
+  floorThumbPlaceholder: {
+    backgroundColor: colors.slate[100],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  floorInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  floorName: {
+    ...typography.bodyBold,
+    color: colors.slate[800],
+  },
+  floorDesc: {
+    ...typography.small,
+    color: colors.slate[500],
+  },
+  floorMeta: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: 2,
+  },
+  floorMetaText: {
+    ...typography.caption,
+    color: colors.slate[500],
+  },
+  addFloorBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderWidth: 1.5,
+    borderColor: colors.primary[500],
+    borderStyle: 'dashed',
+    paddingVertical: spacing.md,
+    borderRadius: radii.lg,
+  },
+  addFloorBtnText: {
+    ...typography.bodyBold,
+    color: colors.primary[500],
   },
 });

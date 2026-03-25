@@ -267,6 +267,20 @@ export const uploadAvatar = async (imageUri: string): Promise<{ avatarUrl: strin
   return response.json();
 };
 
+// === Floors ===
+
+export const createFloor = async (parentId: string, data: {
+  floor: string;
+  description?: string;
+  amenities?: string[];
+  placeType?: string;
+  genderAccess?: string;
+  isPrivate?: boolean;
+}) => {
+  const response = await api.post(`/lactarios/${parentId}/floors`, data);
+  return response.data;
+};
+
 // === Direct update (ADMIN/ELITE only) ===
 
 export const updateLactario = async (id: string, data: {

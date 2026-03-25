@@ -58,6 +58,24 @@ export interface Lactario {
   isPrivate?: boolean;
   createdBy?: string;
   tags?: string[];
+  // Multi-floor
+  parentId?: string | null;
+  floor?: string | null;
+  parent?: { id: string; name: string; address?: string; latitude: number; longitude: number } | null;
+  floors?: LactarioFloor[];
+  floorCount?: number;
+}
+
+export interface LactarioFloor {
+  id: string;
+  floor: string;
+  description?: string;
+  placeType?: string;
+  genderAccess?: string;
+  isPrivate?: boolean;
+  rating?: number;
+  reviewCount?: number;
+  imageUrl?: string;
 }
 
 export interface Badge {

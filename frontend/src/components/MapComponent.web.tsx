@@ -29,6 +29,9 @@ const ALL_ACTIVE: Record<FilterKey, boolean> = {
   LACTARIO: true, CAMBIADOR: true, BANO_FAMILIAR: true, PUNTO_INTERES: true,
 };
 
+let Location: any = null;
+try { Location = require('expo-location'); } catch (_) {}
+
 export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget }: MapComponentProps) {
   const iframeRef = useRef<any>(null);
   const [visibleCounts, setVisibleCounts] = useState<Record<FilterKey, number>>({
@@ -36,8 +39,49 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
   });
   const [activeFilters, setActiveFilters] = useState<Record<FilterKey, boolean>>(ALL_ACTIVE);
   const activeFiltersRef = useRef(activeFilters);
+  const userLocationSent = useRef(false);
 
   useEffect(() => { activeFiltersRef.current = activeFilters; }, [activeFilters]);
+
+  // Get user location from parent context and send to iframe
+  useEffect(() => {
+    if (userLocationSent.current) return;
+    (async () => {
+      try {
+        let lat: number | null = null;
+        let lng: number | null = null;
+        if (Location) {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            lat = loc.coords.latitude;
+            lng = loc.coords.longitude;
+          }
+        } else if (navigator.geolocation) {
+          const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: false, timeout: 15000, maximumAge: 60000,
+            })
+          );
+          lat = pos.coords.latitude;
+          lng = pos.coords.longitude;
+        }
+        if (lat !== null && lng !== null) {
+          userLocationSent.current = true;
+          // Wait for iframe to be ready, then send location
+          const sendLocation = () => {
+            iframeRef.current?.contentWindow?.postMessage(
+              { type: 'userLocation', lat, lng }, '*'
+            );
+          };
+          // Send immediately and also after a delay (iframe might not be ready)
+          sendLocation();
+          setTimeout(sendLocation, 1500);
+          setTimeout(sendLocation, 3000);
+        }
+      } catch (_) {}
+    })();
+  }, [lactarios]);
 
   useEffect(() => {
     if (!zoomTarget || !iframeRef.current?.contentWindow) return;
@@ -212,10 +256,24 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
   map.on('zoomend', _updateCount);
   setTimeout(_updateCount, 800);
 
+  var _userMarkerAdded = false;
+  function _addUserMarker(lat, lng) {
+    if (_userMarkerAdded) return;
+    _userMarkerAdded = true;
+    map.setView([lat, lng], 16);
+    var userIcon = L.divIcon({
+      className: '',
+      html: '<div class="user-location-wrap"><div class="user-pulse"></div><div class="user-dot"></div></div>',
+      iconSize: [60, 60], iconAnchor: [30, 30]
+    });
+    L.marker([lat, lng], { icon: userIcon, zIndexOffset: 1000 }).addTo(map);
+  }
+
   window.addEventListener('message', function(e) {
     if (!e.data || !e.data.type) return;
     if (e.data.type === 'zoomTo') { map.setView([e.data.lat, e.data.lng], e.data.zoom||14); }
     if (e.data.type === 'recount') { _updateCount(); }
+    if (e.data.type === 'userLocation') { _addUserMarker(e.data.lat, e.data.lng); }
     if (e.data.type === 'filterTypes') {
       _activeFilters = e.data.active;
       markerCluster.clearLayers();
@@ -225,23 +283,6 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
       _updateCount();
     }
   });
-
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      function(pos) {
-        var lat = pos.coords.latitude, lng = pos.coords.longitude;
-        map.setView([lat, lng], 16);
-        var userIcon = L.divIcon({
-          className: '',
-          html: '<div class="user-location-wrap"><div class="user-pulse"></div><div class="user-dot"></div></div>',
-          iconSize: [60, 60], iconAnchor: [30, 30]
-        });
-        L.marker([lat, lng], { icon: userIcon, zIndexOffset: 1000 }).addTo(map);
-      },
-      function(err) { console.warn('Geolocation:', err.message); },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
-    );
-  }
 <\/script>
 </body></html>`;
   }, [lactarios]);
@@ -283,7 +324,7 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
         <iframe
           ref={iframeRef}
           srcDoc={mapHtml}
-          allow="geolocation"
+          allow="geolocation *"
           style={{ width: '100%', height: '100%', border: 'none' } as any}
           title="LactaMap"
         />

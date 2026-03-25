@@ -108,12 +108,16 @@ export default function RoomDetailScreen() {
   const [dontShowAgain, setDontShowAgain] = useState(false);
 
   // Show private warning modal for restricted-access locations
+  const privateModalChecked = useRef(false);
   useEffect(() => {
-    if (!initialRoom.isPrivate) return;
+    if (privateModalChecked.current) return;
+    const isPrivate = room.isPrivate || initialRoom.isPrivate;
+    if (!isPrivate) return;
+    privateModalChecked.current = true;
     AsyncStorage.getItem(PRIVATE_MODAL_DISMISSED_KEY).then((val) => {
       if (val !== 'true') setShowPrivateModal(true);
     });
-  }, [initialRoom.isPrivate]);
+  }, [room.isPrivate, initialRoom.isPrivate]);
 
   const handlePrivateModalContinue = () => {
     if (dontShowAgain) {
@@ -688,7 +692,7 @@ export default function RoomDetailScreen() {
                   <TouchableOpacity
                     key={floor.id}
                     style={styles.floorCard}
-                    onPress={() => navigation.push('RoomDetail', { room: { id: floor.id, name: room.name, floor: floor.floor, status: 'ACTIVE' } })}
+                    onPress={() => navigation.push('RoomDetail', { room: { id: floor.id, name: room.name, floor: floor.floor, status: 'ACTIVE', isPrivate: floor.isPrivate } })}
                     activeOpacity={0.7}
                   >
                     {floor.imageUrl ? (

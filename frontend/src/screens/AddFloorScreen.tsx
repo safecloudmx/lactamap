@@ -264,20 +264,32 @@ export default function AddFloorScreen() {
         </TouchableOpacity>
 
         {/* Private info modal */}
-        <Modal visible={showPrivateInfo} transparent animationType="fade">
+        <Modal visible={showPrivateInfo} transparent animationType="fade" onRequestClose={() => setShowPrivateInfo(false)}>
           <View style={styles.modalOverlay}>
             <View style={styles.modalCard}>
-              <Info size={28} color={colors.primary[500]} />
-              <Text style={styles.modalTitle}>Acceso restringido</Text>
-              <Text style={styles.modalMsg}>
-                Marca esta opción si el piso requiere autorización, credencial o acceso especial para ingresar.
+              <View style={styles.modalIconRow}><Lock size={28} color="#6366f1" /></View>
+              <Text style={styles.modalTitle}>Ubicación con Acceso Restringido</Text>
+              <Text style={styles.modalDesc}>
+                Estás marcando este espacio como de <Text style={styles.bold}>acceso restringido</Text>. Esto significa que se encuentra dentro de una institución privada como:
               </Text>
+              <View style={styles.bulletList}>
+                <Text style={styles.bullet}>• Empresas o zonas de trabajo</Text>
+                <Text style={styles.bullet}>• Escuelas o universidades</Text>
+                <Text style={styles.bullet}>• Deportivos o clubes privados</Text>
+                <Text style={styles.bullet}>• Hospitales o clínicas</Text>
+              </View>
+              <View style={styles.privateNote}>
+                <Info size={16} color="#6366f1" />
+                <Text style={styles.privateNoteText}>
+                  Este espacio aparecerá con un indicador especial para que otros usuarios sepan que el acceso <Text style={styles.bold}>no es público</Text>.
+                </Text>
+              </View>
               <View style={styles.modalActions}>
                 <TouchableOpacity style={styles.modalCancel} onPress={() => setShowPrivateInfo(false)}>
                   <Text style={styles.modalCancelText}>Cancelar</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.modalConfirm} onPress={() => { setIsPrivate(true); setShowPrivateInfo(false); }}>
-                  <Text style={styles.modalConfirmText}>Activar</Text>
+                <TouchableOpacity style={[styles.modalConfirm, { backgroundColor: '#6366f1' }]} onPress={() => { setIsPrivate(true); setShowPrivateInfo(false); }}>
+                  <Text style={styles.modalConfirmText}>Entendido</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -400,14 +412,49 @@ const styles = StyleSheet.create({
     maxWidth: 360,
     gap: spacing.md,
   },
+  modalIconRow: {
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
   modalTitle: {
     ...typography.h4,
     color: colors.slate[800],
-  },
-  modalMsg: {
-    ...typography.small,
-    color: colors.slate[500],
     textAlign: 'center',
+  },
+  modalDesc: {
+    ...typography.small,
+    color: colors.slate[600],
+    lineHeight: 22,
+    marginBottom: spacing.sm,
+  },
+  bulletList: {
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    width: '100%',
+  },
+  bullet: {
+    ...typography.small,
+    color: colors.slate[600],
+    lineHeight: 20,
+  },
+  bold: {
+    fontWeight: '700',
+    color: colors.slate[800],
+  },
+  privateNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: '#eef2ff',
+    padding: spacing.md,
+    borderRadius: radii.md,
+    marginBottom: spacing.md,
+    width: '100%',
+  },
+  privateNoteText: {
+    ...typography.small,
+    color: '#4338ca',
+    flex: 1,
     lineHeight: 20,
   },
   modalActions: {

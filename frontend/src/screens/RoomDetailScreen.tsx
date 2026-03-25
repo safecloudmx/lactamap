@@ -20,6 +20,7 @@ import {
 const SCREEN_WIDTH = Dimensions.get('window').width;
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   ArrowLeft,
@@ -50,6 +51,7 @@ import {
   Plus,
   ChevronRight,
   Building2,
+  Info,
 } from 'lucide-react-native';
 import { Lactario, LactarioFloor, Review } from '../types';
 import { getLactarioById, getReviews, createReview, updateReview, deleteReview, reportReview, deleteLactario, verifyLactario, unverifyLactario } from '../services/api';
@@ -69,6 +71,8 @@ const AMENITY_ICONS: Record<string, React.ComponentType<any>> = {
   'Congelador': Snowflake,
   'Clima (A/C)': Wind,
 };
+
+const PRIVATE_MODAL_DISMISSED_KEY = '@LactaMap:privateModalDismissed';
 
 export default function RoomDetailScreen() {
   const navigation = useNavigation<any>();
@@ -100,6 +104,24 @@ export default function RoomDetailScreen() {
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [showPrivateModal, setShowPrivateModal] = useState(false);
+  const [dontShowAgain, setDontShowAgain] = useState(false);
+
+  // Show private warning modal for restricted-access locations
+  useEffect(() => {
+    if (!initialRoom.isPrivate) return;
+    AsyncStorage.getItem(PRIVATE_MODAL_DISMISSED_KEY).then((val) => {
+      if (val !== 'true') setShowPrivateModal(true);
+    });
+  }, [initialRoom.isPrivate]);
+
+  const handlePrivateModalContinue = () => {
+    if (dontShowAgain) {
+      AsyncStorage.setItem(PRIVATE_MODAL_DISMISSED_KEY, 'true');
+    }
+    setShowPrivateModal(false);
+    setDontShowAgain(false);
+  };
 
   const fetchDetails = useCallback(async () => {
     try {
@@ -441,6 +463,40 @@ export default function RoomDetailScreen() {
                   )}
                 </TouchableOpacity>
               </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Private Location Warning Modal */}
+        <Modal visible={showPrivateModal} transparent animationType="fade" onRequestClose={() => setShowPrivateModal(false)}>
+          <View style={styles.pvModalBackdrop}>
+            <View style={styles.pvModalCard}>
+              <View style={styles.pvModalIconRow}>
+                <Lock size={28} color="#6366f1" />
+              </View>
+              <Text style={styles.pvModalTitle}>Ubicación con Acceso Restringido</Text>
+              <Text style={styles.pvModalDesc}>
+                Esta ubicación se encuentra dentro de una <Text style={styles.pvModalBold}>institución privada</Text> (empresa, escuela, club, etc.) y su acceso puede estar controlado o limitado al público en general.
+              </Text>
+              <View style={styles.pvModalNote}>
+                <Info size={16} color="#6366f1" />
+                <Text style={styles.pvModalNoteText}>
+                  Te recomendamos verificar si puedes acceder antes de trasladarte.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.pvModalCheckRow}
+                onPress={() => setDontShowAgain(!dontShowAgain)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.pvModalCheckbox, dontShowAgain && styles.pvModalCheckboxActive]}>
+                  {dontShowAgain && <Text style={styles.pvModalCheckmark}>✓</Text>}
+                </View>
+                <Text style={styles.pvModalCheckLabel}>No mostrar otra vez</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.pvModalBtn} onPress={handlePrivateModalContinue}>
+                <Text style={styles.pvModalBtnText}>Entendido</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
@@ -1504,4 +1560,19 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     color: colors.primary[500],
   },
+  pvModalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: spacing.xxl },
+  pvModalCard: { backgroundColor: colors.white, borderRadius: radii.xl, padding: spacing.xxl, width: '100%', ...shadows.lg },
+  pvModalIconRow: { alignItems: 'center', marginBottom: spacing.md },
+  pvModalTitle: { ...typography.h3, color: colors.slate[800], textAlign: 'center', marginBottom: spacing.md },
+  pvModalDesc: { ...typography.small, color: colors.slate[600], lineHeight: 22, marginBottom: spacing.md, textAlign: 'center' },
+  pvModalBold: { fontWeight: '700', color: colors.slate[800] },
+  pvModalNote: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, backgroundColor: '#eef2ff', padding: spacing.md, borderRadius: radii.md, marginBottom: spacing.lg },
+  pvModalNoteText: { ...typography.small, color: '#4338ca', flex: 1, lineHeight: 20 },
+  pvModalCheckRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.lg },
+  pvModalCheckbox: { width: 22, height: 22, borderRadius: 4, borderWidth: 2, borderColor: colors.slate[300], alignItems: 'center', justifyContent: 'center' },
+  pvModalCheckboxActive: { backgroundColor: '#6366f1', borderColor: '#6366f1' },
+  pvModalCheckmark: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  pvModalCheckLabel: { ...typography.small, color: colors.slate[600] },
+  pvModalBtn: { backgroundColor: '#6366f1', paddingVertical: spacing.md, borderRadius: radii.md, alignItems: 'center' },
+  pvModalBtnText: { ...typography.bodyBold, color: colors.white },
 });

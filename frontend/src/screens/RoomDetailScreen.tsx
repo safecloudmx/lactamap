@@ -648,6 +648,12 @@ export default function RoomDetailScreen() {
                         <Text style={styles.floorDesc} numberOfLines={1}>{floor.description}</Text>
                       )}
                       <View style={styles.floorMeta}>
+                        {floor.isPrivate && (
+                          <View style={styles.floorPrivateBadge}>
+                            <Lock size={10} color="#4338ca" />
+                            <Text style={styles.floorPrivateText}>Restringido</Text>
+                          </View>
+                        )}
                         {(floor.rating ?? 0) > 0 && (
                           <Text style={styles.floorMetaText}>⭐ {(floor.rating ?? 0).toFixed(1)}</Text>
                         )}
@@ -1464,6 +1470,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.md,
     marginTop: 2,
+  },
+  floorPrivateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#eef2ff',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radii.full,
+  },
+  floorPrivateText: {
+    ...typography.caption,
+    color: '#4338ca',
+    fontWeight: '600',
   },
   floorMetaText: {
     ...typography.caption,

@@ -14,6 +14,7 @@ import {
   Dimensions,
   Modal,
   StatusBar,
+  Linking,
 } from 'react-native';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -450,12 +451,21 @@ export default function RoomDetailScreen() {
             </View>
           </View>
 
-          {/* Address */}
+          {/* Address — tap to open directions */}
           {room.address && (
-            <View style={styles.addressRow}>
-              <MapPin size={16} color={colors.slate[400]} />
-              <Text style={styles.addressText}>{room.address}</Text>
-            </View>
+            <TouchableOpacity
+              style={styles.addressRow}
+              onPress={() => {
+                const dest = room.latitude && room.longitude
+                  ? `${room.latitude},${room.longitude}`
+                  : encodeURIComponent(room.address!);
+                Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${dest}`);
+              }}
+              activeOpacity={0.6}
+            >
+              <MapPin size={16} color={colors.primary[500]} />
+              <Text style={[styles.addressText, { color: colors.primary[500] }]}>{room.address}</Text>
+            </TouchableOpacity>
           )}
 
           {/* Type + Verified */}

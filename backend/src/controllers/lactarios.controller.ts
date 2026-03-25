@@ -13,6 +13,7 @@ const getAll = async (req: Request, res: Response) => {
 
     const where: any = {
       status: status ? String(status) : 'ACTIVE',
+      parentId: null, // Only top-level lactarios (not floors)
     };
 
     if (verified === 'true') {
@@ -30,6 +31,7 @@ const getAll = async (req: Request, res: Response) => {
     if (mine === 'true' && userId) {
       where.ownerId = userId;
       delete where.status; // Show all statuses for own lactarios
+      delete where.parentId; // Show floors too in "my contributions"
     }
 
     const lactarios = await prisma.lactario.findMany({
@@ -38,7 +40,7 @@ const getAll = async (req: Request, res: Response) => {
         amenities: true,
         owner: { select: { id: true, name: true, email: true } },
         photos: { where: { moderationStatus: 'APPROVED' }, orderBy: { createdAt: 'desc' }, take: 1 },
-        _count: { select: { reviews: true } },
+        _count: { select: { reviews: true, floors: true } },
         submission: {
           select: {
             id: true,
@@ -54,6 +56,7 @@ const getAll = async (req: Request, res: Response) => {
       ...l,
       rating: Number(l.avgRating),
       reviewCount: l._count.reviews,
+      floorCount: l._count.floors,
       isVerified: l.verifiedType !== 'NONE',
       imageUrl: await signUrl(l.photos[0]?.url ?? null),
       photos: l.photos.map((p) => ({ id: p.id, url: p.url })),
@@ -88,6 +91,19 @@ const getById = async (req: Request, res: Response) => {
               : false,
           },
         },
+        // Multi-floor
+        floors: {
+          where: { status: 'ACTIVE' },
+          include: {
+            amenities: true,
+            photos: { where: { moderationStatus: 'APPROVED' }, orderBy: { createdAt: 'desc' }, take: 1 },
+            _count: { select: { reviews: true } },
+          },
+          orderBy: { floor: 'asc' },
+        },
+        parent: {
+          select: { id: true, name: true, address: true, latitude: true, longitude: true },
+        },
       },
     });
     if (!lactario) return res.status(404).json({ error: 'Lactario not found' });
@@ -98,6 +114,17 @@ const getById = async (req: Request, res: Response) => {
         user: { ...r.user, avatarUrl: await signUrl(r.user.avatarUrl) },
       }))),
     ]);
+    const floors = await Promise.all((lactario.floors || []).map(async (f: any) => ({
+      id: f.id,
+      floor: f.floor,
+      description: f.description,
+      placeType: f.placeType,
+      genderAccess: f.genderAccess,
+      isPrivate: f.isPrivate,
+      rating: Number(f.avgRating),
+      reviewCount: f._count.reviews,
+      imageUrl: await signUrl(f.photos[0]?.url ?? null),
+    })));
     res.json({
       ...lactario,
       rating: Number(lactario.avgRating),
@@ -105,6 +132,7 @@ const getById = async (req: Request, res: Response) => {
       imageUrl: signedPhotos[0]?.url ?? null,
       photos: signedPhotos,
       reviews: signedReviews,
+      floors,
     });
   } catch (error) {
     res.status(500).json({ error: 'Error fetching lactario' });
@@ -310,4 +338,57 @@ const unverify = async (req: Request, res: Response) => {
   }
 };
 
-export default { getAll, getById, create, update, remove, verify, unverify };
+const createFloor = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params; // parent lactario ID
+    const userId = (req as any).user?.userId;
+    const userRole = (req as any).user?.role;
+
+    const parent = await prisma.lactario.findUnique({ where: { id } });
+    if (!parent) return res.status(404).json({ error: 'Ubicación padre no encontrada' });
+    if (parent.parentId) return res.status(400).json({ error: 'No se puede agregar piso a un piso' });
+
+    const { floor, description, amenities, placeType, genderAccess, isPrivate } = req.body;
+    if (!floor || !floor.trim()) return res.status(400).json({ error: 'El campo "floor" es requerido' });
+
+    const amenityList: string[] = Array.isArray(amenities) ? amenities : [];
+    const autoApprove = AUTO_APPROVE_ROLES.includes(userRole);
+
+    const lactario = await prisma.lactario.create({
+      data: {
+        name: parent.name,
+        latitude: parent.latitude,
+        longitude: parent.longitude,
+        address: parent.address,
+        parentId: id,
+        floor: floor.trim(),
+        description,
+        status: autoApprove ? 'ACTIVE' : 'PENDING',
+        placeType: ['CAMBIADOR', 'BANO_FAMILIAR', 'PUNTO_INTERES'].includes(placeType) ? placeType : 'LACTARIO',
+        ...(genderAccess && { genderAccess }),
+        ...(isPrivate !== undefined && { isPrivate: Boolean(isPrivate) }),
+        ownerId: userId,
+        amenities: { create: mapAmenitiesToDB(amenityList) },
+      },
+    });
+
+    if (!autoApprove && userId) {
+      await prisma.lactarioSubmission.create({
+        data: { lactarioId: lactario.id, submittedById: userId, status: 'PENDING' },
+      });
+    }
+
+    if (userId) await GamificationService.addPoints(userId, 15, 'FLOOR_SUBMITTED');
+
+    res.status(201).json({
+      message: autoApprove ? 'Piso publicado' : 'Piso enviado para revisión',
+      requiresReview: !autoApprove,
+      lactario,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al crear piso' });
+  }
+};
+
+export default { getAll, getById, create, update, remove, verify, unverify, createFloor };

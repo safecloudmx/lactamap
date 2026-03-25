@@ -117,11 +117,12 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
       .filter((l) => l.latitude && l.longitude)
       .map((l) => {
         const pt = l.placeType || 'LACTARIO';
+        const isBuilding = (l as any).floorCount > 0;
         const pinColor = PIN_COLORS[pt] || '#f43f5e';
         const iconSvg = PIN_ICONS[pt] || PIN_ICONS.LACTARIO;
-        const badgeBg = pt === 'CAMBIADOR' ? '#ede9fe' : pt === 'BANO_FAMILIAR' ? '#ccfbf1' : pt === 'PUNTO_INTERES' ? '#fef3c7' : '#fff1f2';
-        const badgeColor = pt === 'CAMBIADOR' ? '#7c3aed' : pt === 'BANO_FAMILIAR' ? '#0f766e' : pt === 'PUNTO_INTERES' ? '#d97706' : '#e11d48';
-        const badgeLabel = pt === 'CAMBIADOR' ? '🚼 Cambiador' : pt === 'BANO_FAMILIAR' ? '🚻 Baño Familiar' : pt === 'PUNTO_INTERES' ? '⭐ Punto de Interés' : '🤱 Lactario';
+        const badgeBg = isBuilding ? '#1e293b' : pt === 'CAMBIADOR' ? '#ede9fe' : pt === 'BANO_FAMILIAR' ? '#ccfbf1' : pt === 'PUNTO_INTERES' ? '#fef3c7' : '#fff1f2';
+        const badgeColor = isBuilding ? '#f8fafc' : pt === 'CAMBIADOR' ? '#7c3aed' : pt === 'BANO_FAMILIAR' ? '#0f766e' : pt === 'PUNTO_INTERES' ? '#d97706' : '#e11d48';
+        const badgeLabel = isBuilding ? '🏢 Edificio' : pt === 'CAMBIADOR' ? '🚼 Cambiador' : pt === 'BANO_FAMILIAR' ? '🚻 Baño Familiar' : pt === 'PUNTO_INTERES' ? '⭐ Punto de Interés' : '🤱 Lactario';
         const priv = l.isPrivate === true;
         const pinClass = priv ? 'custom-pin pin-private' : 'custom-pin';
         const privateBadge = priv

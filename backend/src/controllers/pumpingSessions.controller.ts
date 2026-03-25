@@ -204,6 +204,7 @@ export const pumpingSessionsController = {
       if (photoCount >= 5) return res.status(400).json({ error: 'Máximo 5 fotos por sesión' });
 
       const webpBuffer = await sharp(req.file.buffer)
+        .rotate() // auto-rotate based on EXIF orientation
         .resize(1200, 800, { fit: 'inside', withoutEnlargement: true })
         .webp({ quality: 80 })
         .toBuffer();

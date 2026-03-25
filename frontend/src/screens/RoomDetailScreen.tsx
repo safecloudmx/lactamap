@@ -20,6 +20,7 @@ import {
 const SCREEN_WIDTH = Dimensions.get('window').width;
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   ArrowLeft,
@@ -46,8 +47,13 @@ import {
   X,
   ShieldCheck,
   ShieldOff,
+  Layers,
+  Plus,
+  ChevronRight,
+  Building2,
+  Info,
 } from 'lucide-react-native';
-import { Lactario, Review } from '../types';
+import { Lactario, LactarioFloor, Review } from '../types';
 import { getLactarioById, getReviews, createReview, updateReview, deleteReview, reportReview, deleteLactario, verifyLactario, unverifyLactario } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Rating, Card, AvatarInitials, PlaceholderImage } from '../components/ui';
@@ -65,6 +71,8 @@ const AMENITY_ICONS: Record<string, React.ComponentType<any>> = {
   'Congelador': Snowflake,
   'Clima (A/C)': Wind,
 };
+
+const PRIVATE_MODAL_DISMISSED_KEY = '@LactaMap:privateModalDismissed';
 
 export default function RoomDetailScreen() {
   const navigation = useNavigation<any>();
@@ -96,6 +104,28 @@ export default function RoomDetailScreen() {
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [showPrivateModal, setShowPrivateModal] = useState(false);
+  const [dontShowAgain, setDontShowAgain] = useState(false);
+
+  // Show private warning modal for restricted-access locations
+  const privateModalChecked = useRef(false);
+  useEffect(() => {
+    if (privateModalChecked.current) return;
+    const isPrivate = room.isPrivate || initialRoom.isPrivate;
+    if (!isPrivate) return;
+    privateModalChecked.current = true;
+    AsyncStorage.getItem(PRIVATE_MODAL_DISMISSED_KEY).then((val) => {
+      if (val !== 'true') setShowPrivateModal(true);
+    });
+  }, [room.isPrivate, initialRoom.isPrivate]);
+
+  const handlePrivateModalContinue = () => {
+    if (dontShowAgain) {
+      AsyncStorage.setItem(PRIVATE_MODAL_DISMISSED_KEY, 'true');
+    }
+    setShowPrivateModal(false);
+    setDontShowAgain(false);
+  };
 
   const fetchDetails = useCallback(async () => {
     try {
@@ -441,10 +471,46 @@ export default function RoomDetailScreen() {
           </View>
         </Modal>
 
+        {/* Private Location Warning Modal */}
+        <Modal visible={showPrivateModal} transparent animationType="fade" onRequestClose={() => setShowPrivateModal(false)}>
+          <View style={styles.pvModalBackdrop}>
+            <View style={styles.pvModalCard}>
+              <View style={styles.pvModalIconRow}>
+                <Lock size={28} color="#6366f1" />
+              </View>
+              <Text style={styles.pvModalTitle}>Ubicación con Acceso Restringido</Text>
+              <Text style={styles.pvModalDesc}>
+                Esta ubicación se encuentra dentro de una <Text style={styles.pvModalBold}>institución privada</Text> (empresa, escuela, club, etc.) y su acceso puede estar controlado o limitado al público en general.
+              </Text>
+              <View style={styles.pvModalNote}>
+                <Info size={16} color="#6366f1" />
+                <Text style={styles.pvModalNoteText}>
+                  Te recomendamos verificar si puedes acceder antes de trasladarte.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.pvModalCheckRow}
+                onPress={() => setDontShowAgain(!dontShowAgain)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.pvModalCheckbox, dontShowAgain && styles.pvModalCheckboxActive]}>
+                  {dontShowAgain && <Text style={styles.pvModalCheckmark}>✓</Text>}
+                </View>
+                <Text style={styles.pvModalCheckLabel}>No mostrar otra vez</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.pvModalBtn} onPress={handlePrivateModalContinue}>
+                <Text style={styles.pvModalBtnText}>Entendido</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
         <View style={styles.body}>
           {/* Title + Rating */}
           <View style={styles.titleRow}>
-            <Text style={styles.roomName}>{room.name}</Text>
+            <Text style={styles.roomName}>
+              {room.floor ? `${room.name} — Piso ${room.floor}` : room.name}
+            </Text>
             <View style={styles.ratingBadge}>
               <Rating value={room.rating || 0} size={16} />
               <Text style={styles.ratingValue}>{(room.rating || 0).toFixed(1)}</Text>
@@ -470,7 +536,12 @@ export default function RoomDetailScreen() {
 
           {/* Type + Verified */}
           <View style={styles.badgeRow}>
-            {room.placeType && (
+            {/* Show "Edificio" badge if this is a building with floors */}
+            {((room.floors && room.floors.length > 0) || (room.floorCount && room.floorCount > 0)) ? (
+              <View style={styles.placeTypeBadgeEdificio}>
+                <Text style={styles.placeTypeBadgeTextEdificio}>🏢 Edificio</Text>
+              </View>
+            ) : room.placeType ? (
               <View style={[
                 styles.placeTypeBadge,
                 room.placeType === 'CAMBIADOR' && styles.placeTypeBadgeCambiador,
@@ -489,7 +560,7 @@ export default function RoomDetailScreen() {
                     : '🤱 Lactario'}
                 </Text>
               </View>
-            )}
+            ) : null}
             {room.isVerified && (
               <View style={styles.verifiedTag}>
                 <BadgeCheck size={14} color={colors.success} />
@@ -589,6 +660,85 @@ export default function RoomDetailScreen() {
                 ))}
               </View>
             </View>
+          )}
+
+          {/* Parent link (for child/floor lactarios) */}
+          {room.parent && (
+            <TouchableOpacity
+              style={styles.parentLink}
+              onPress={() => navigation.push('RoomDetail', { room: { id: room.parent!.id, name: room.parent!.name, address: room.parent!.address, latitude: room.parent!.latitude, longitude: room.parent!.longitude, status: 'ACTIVE' } })}
+              activeOpacity={0.6}
+            >
+              <Building2 size={16} color={colors.primary[500]} />
+              <Text style={styles.parentLinkText}>Ver edificio: {room.parent.name}</Text>
+              <ChevronRight size={16} color={colors.primary[500]} />
+            </TouchableOpacity>
+          )}
+
+          {/* Floors / Spaces Section */}
+          {room.floors && room.floors.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.floorsHeader}>
+                <Layers size={18} color={colors.slate[700]} />
+                <Text style={styles.sectionTitle}>Espacios ({room.floors.length})</Text>
+              </View>
+              {room.floors.map((floor: LactarioFloor) => {
+                const floorTypeLabel =
+                  floor.placeType === 'CAMBIADOR' ? '🚼 Cambiador'
+                  : floor.placeType === 'BANO_FAMILIAR' ? '🚻 Baño Familiar'
+                  : floor.placeType === 'PUNTO_INTERES' ? '⭐ Punto de Interés'
+                  : '🤱 Lactario';
+                return (
+                  <TouchableOpacity
+                    key={floor.id}
+                    style={styles.floorCard}
+                    onPress={() => navigation.push('RoomDetail', { room: { id: floor.id, name: room.name, floor: floor.floor, status: 'ACTIVE', isPrivate: floor.isPrivate } })}
+                    activeOpacity={0.7}
+                  >
+                    {floor.imageUrl ? (
+                      <Image source={{ uri: floor.imageUrl }} style={styles.floorThumb} />
+                    ) : (
+                      <View style={[styles.floorThumb, styles.floorThumbPlaceholder]}>
+                        <Layers size={20} color={colors.slate[300]} />
+                      </View>
+                    )}
+                    <View style={styles.floorInfo}>
+                      <Text style={styles.floorName}>Piso {floor.floor} — {floorTypeLabel}</Text>
+                      {floor.description && (
+                        <Text style={styles.floorDesc} numberOfLines={1}>{floor.description}</Text>
+                      )}
+                      <View style={styles.floorMeta}>
+                        {floor.isPrivate && (
+                          <View style={styles.floorPrivateBadge}>
+                            <Lock size={10} color="#4338ca" />
+                            <Text style={styles.floorPrivateText}>Restringido</Text>
+                          </View>
+                        )}
+                        {(floor.rating ?? 0) > 0 && (
+                          <Text style={styles.floorMetaText}>⭐ {(floor.rating ?? 0).toFixed(1)}</Text>
+                        )}
+                        {(floor.reviewCount ?? 0) > 0 && (
+                          <Text style={styles.floorMetaText}>{floor.reviewCount} reseña{floor.reviewCount !== 1 ? 's' : ''}</Text>
+                        )}
+                      </View>
+                    </View>
+                    <ChevronRight size={18} color={colors.slate[400]} />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Add Floor Button (for parent lactarios without parentId) */}
+          {!room.parentId && !isGuest && (
+            <TouchableOpacity
+              style={styles.addFloorBtn}
+              onPress={() => navigation.navigate('AddFloor', { parentId: room.id, parentName: room.name })}
+              activeOpacity={0.7}
+            >
+              <Plus size={18} color={colors.primary[500]} />
+              <Text style={styles.addFloorBtnText}>Agregar espacio</Text>
+            </TouchableOpacity>
           )}
 
           {/* Reviews Section */}
@@ -984,6 +1134,18 @@ const styles = StyleSheet.create({
   placeTypeBadgePuntoInteres: {
     backgroundColor: '#fef3c7',
   },
+  placeTypeBadgeEdificio: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.full,
+    backgroundColor: '#1e293b',
+  },
+  placeTypeBadgeTextEdificio: {
+    ...typography.captionBold,
+    color: '#f8fafc',
+  },
   placeTypeBadgeText: {
     ...typography.captionBold,
     color: '#e11d48',
@@ -1314,4 +1476,107 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: spacing.md,
   },
+  parentLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: radii.lg,
+  },
+  parentLinkText: {
+    ...typography.smallBold,
+    color: colors.primary[500],
+    flex: 1,
+  },
+  floorsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  floorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderRadius: radii.lg,
+    padding: spacing.md,
+    gap: spacing.md,
+    ...shadows.sm,
+  },
+  floorThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: radii.md,
+  },
+  floorThumbPlaceholder: {
+    backgroundColor: colors.slate[100],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  floorInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  floorName: {
+    ...typography.bodyBold,
+    color: colors.slate[800],
+  },
+  floorDesc: {
+    ...typography.small,
+    color: colors.slate[500],
+  },
+  floorMeta: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: 2,
+  },
+  floorPrivateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#eef2ff',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radii.full,
+  },
+  floorPrivateText: {
+    ...typography.caption,
+    color: '#4338ca',
+    fontWeight: '600',
+  },
+  floorMetaText: {
+    ...typography.caption,
+    color: colors.slate[500],
+  },
+  addFloorBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderWidth: 1.5,
+    borderColor: colors.primary[500],
+    borderStyle: 'dashed',
+    paddingVertical: spacing.md,
+    borderRadius: radii.lg,
+  },
+  addFloorBtnText: {
+    ...typography.bodyBold,
+    color: colors.primary[500],
+  },
+  pvModalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: spacing.xxl },
+  pvModalCard: { backgroundColor: colors.white, borderRadius: radii.xl, padding: spacing.xxl, width: '100%', ...shadows.lg },
+  pvModalIconRow: { alignItems: 'center', marginBottom: spacing.md },
+  pvModalTitle: { ...typography.h3, color: colors.slate[800], textAlign: 'center', marginBottom: spacing.md },
+  pvModalDesc: { ...typography.small, color: colors.slate[600], lineHeight: 22, marginBottom: spacing.md, textAlign: 'center' },
+  pvModalBold: { fontWeight: '700', color: colors.slate[800] },
+  pvModalNote: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, backgroundColor: '#eef2ff', padding: spacing.md, borderRadius: radii.md, marginBottom: spacing.lg },
+  pvModalNoteText: { ...typography.small, color: '#4338ca', flex: 1, lineHeight: 20 },
+  pvModalCheckRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.lg },
+  pvModalCheckbox: { width: 22, height: 22, borderRadius: 4, borderWidth: 2, borderColor: colors.slate[300], alignItems: 'center', justifyContent: 'center' },
+  pvModalCheckboxActive: { backgroundColor: '#6366f1', borderColor: '#6366f1' },
+  pvModalCheckmark: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  pvModalCheckLabel: { ...typography.small, color: colors.slate[600] },
+  pvModalBtn: { backgroundColor: '#6366f1', paddingVertical: spacing.md, borderRadius: radii.md, alignItems: 'center' },
+  pvModalBtnText: { ...typography.bodyBold, color: colors.white },
 });

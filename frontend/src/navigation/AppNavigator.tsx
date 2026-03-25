@@ -1,11 +1,57 @@
 import React from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Platform } from 'react-native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createDrawerNavigator } from '@react-navigation/drawer';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme';
+
+const linking: LinkingOptions<any> = {
+  prefixes: [],
+  config: {
+    screens: {
+      Login: 'login',
+      Main: {
+        path: '',
+        screens: {
+          HomeTabs: {
+            path: '',
+            screens: {
+              Inicio: 'inicio',
+              Mapa: 'mapa',
+              Explorar: 'explorar',
+              Perfil: 'perfil',
+            },
+          },
+          MyContributions: 'mis-contribuciones',
+          Leaderboard: 'leaderboard',
+          Settings: 'ajustes',
+          About: 'acerca',
+        },
+      },
+      RoomDetail: 'room/:roomId?',
+      AddRoomModal: 'agregar-lugar',
+      AddFloor: 'agregar-espacio',
+      EditRoom: 'editar-lugar',
+      EditProfile: 'editar-perfil',
+      NursingTimer: 'lactancia',
+      Resources: 'recursos',
+      FeedingHistory: 'historial-alimentacion',
+      FeedingSessionDetail: 'sesion-alimentacion',
+      AdminReview: 'admin-review',
+      PumpingLog: 'extraccion',
+      PumpingHistory: 'historial-extraccion',
+      SleepTimer: 'sueno',
+      SleepHistory: 'historial-sueno',
+      SleepSessionDetail: 'sesion-sueno',
+      DiaperLog: 'panales',
+      DiaperHistory: 'historial-panales',
+      DiaperRecordDetail: 'registro-panal',
+      RelaxingSounds: 'sonidos',
+    },
+  },
+};
 
 import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen';
@@ -34,6 +80,7 @@ import DiaperLogScreen from '../screens/DiaperLogScreen';
 import DiaperHistoryScreen from '../screens/DiaperHistoryScreen';
 import DiaperRecordDetailScreen from '../screens/DiaperRecordDetailScreen';
 import RelaxingSoundsScreen from '../screens/RelaxingSoundsScreen';
+import AddFloorScreen from '../screens/AddFloorScreen';
 
 import CustomTabBar from '../components/CustomTabBar';
 import DrawerContent from './DrawerContent';
@@ -96,7 +143,7 @@ export const AppNavigator = () => {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={Platform.OS === 'web' ? linking : undefined}>
       <Stack.Navigator screenOptions={{ headerShown: false, cardStyle: { flex: 1 } }}>
         {!user ? (
           <Stack.Screen name="Login" component={LoginScreen} />
@@ -187,6 +234,11 @@ export const AppNavigator = () => {
               name="RelaxingSounds"
               component={RelaxingSoundsScreen}
               options={{ presentation: 'card' }}
+            />
+            <Stack.Screen
+              name="AddFloor"
+              component={AddFloorScreen}
+              options={{ presentation: 'modal' }}
             />
             <Stack.Screen
               name="EditRoom"

@@ -270,14 +270,31 @@ export default function EditRoomScreen() {
   const MapViewComp = RNMaps?.default;
   const RNMarker = RNMaps?.Marker;
 
-  const typeBadgeColor = isCambiador ? '#7c3aed' : colors.primary[500];
-  const typeBadgeBg = isCambiador ? '#ede9fe' : colors.primary[50];
-  const typeLabel = isCambiador ? '🚼 Cambiador' : '🤱 Lactario';
+  const isBuilding = (room.floors && room.floors.length > 0) || (room.floorCount && room.floorCount > 0);
+  const isFloor = !!room.parentId;
+
+  const typeBadgeColor = isBuilding ? '#f8fafc'
+    : isCambiador ? '#7c3aed'
+    : isBanoFamiliar ? '#0f766e'
+    : placeType === 'PUNTO_INTERES' ? '#d97706'
+    : colors.primary[500];
+  const typeBadgeBg = isBuilding ? '#1e293b'
+    : isCambiador ? '#ede9fe'
+    : isBanoFamiliar ? '#ccfbf1'
+    : placeType === 'PUNTO_INTERES' ? '#fef3c7'
+    : colors.primary[50];
+  const typeLabel = isBuilding ? '🏢 Edificio'
+    : isCambiador ? '🚼 Cambiador'
+    : isBanoFamiliar ? '🚻 Baño Familiar'
+    : placeType === 'PUNTO_INTERES' ? '⭐ Punto de Interés'
+    : '🤱 Lactario';
+
+  const headerTitle = isFloor ? `Editar Piso ${room.floor || ''}` : 'Editar Lugar';
 
   return (
     <View style={styles.container}>
       <AppHeader
-        title="Editar Lugar"
+        title={headerTitle}
         onBack={() => navigation.goBack()}
         rightAction={
           <TouchableOpacity onPress={handleSave} disabled={isSaving || !canSave}>

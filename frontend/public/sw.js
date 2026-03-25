@@ -8,10 +8,17 @@
  *   - Everything else: stale-while-revalidate
  */
 
-const CACHE = 'lactamap-v1';
+const CACHE = 'lactamap-v2';
 
-// App shell – minimal set cached at install time
-const SHELL = ['/'];
+// App shell + critical map libraries precached at install time
+const SHELL = [
+  '/',
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+  'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css',
+  'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css',
+  'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js',
+];
 
 // ── Lifecycle ──────────────────────────────────────────────────────────────
 

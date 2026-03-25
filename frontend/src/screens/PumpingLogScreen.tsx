@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   Image, Alert, StyleSheet, Platform, ActivityIndicator,
-  ActionSheetIOS, KeyboardAvoidingView,
+  ActionSheetIOS, KeyboardAvoidingView, Modal, Dimensions, StatusBar,
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import {
@@ -28,6 +28,7 @@ const SIDE_OPTIONS: { key: PumpingSide; label: string }[] = [
 
 const AMOUNT_STEP = 5;
 const MAX_NOTES = 3000;
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
 export default function PumpingLogScreen() {
   const navigation = useNavigation<any>();
@@ -52,6 +53,17 @@ export default function PumpingLogScreen() {
     editSession?.photos?.map((p) => ({ id: p.id, uri: p.url })) || [],
   );
   const [saving, setSaving] = useState(false);
+  const [lightboxVisible, setLightboxVisible] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const lightboxScrollRef = useRef<ScrollView>(null);
+
+  const openLightbox = (index: number) => {
+    setLightboxIndex(index);
+    setLightboxVisible(true);
+    setTimeout(() => {
+      lightboxScrollRef.current?.scrollTo({ x: index * SCREEN_WIDTH, animated: false });
+    }, 50);
+  };
 
   // Date/time editing
   const [editingDate, setEditingDate] = useState(false);
@@ -482,7 +494,7 @@ export default function PumpingLogScreen() {
                 contentContainerStyle={styles.photosContent}
               >
                 {photos.map((photo, i) => (
-                  <View key={i} style={styles.photoThumb}>
+                  <TouchableOpacity key={i} style={styles.photoThumb} activeOpacity={0.8} onPress={() => openLightbox(i)}>
                     <Image source={{ uri: photo.uri }} style={styles.photoImage} />
                     <TouchableOpacity
                       style={styles.photoRemove}
@@ -490,7 +502,7 @@ export default function PumpingLogScreen() {
                     >
                       <X size={14} color={colors.white} />
                     </TouchableOpacity>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </ScrollView>
             )}
@@ -524,6 +536,43 @@ export default function PumpingLogScreen() {
           onChange={handleWebFileChange}
         />
       )}
+
+      {/* Photo Lightbox */}
+      <Modal visible={lightboxVisible} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setLightboxVisible(false)}>
+        <View style={styles.lightboxContainer}>
+          <StatusBar hidden />
+          <ScrollView
+            ref={lightboxScrollRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onScroll={(e) => {
+              const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+              setLightboxIndex(idx);
+            }}
+            style={styles.lightboxScroll}
+          >
+            {photos.map((photo, i) => (
+              <View key={i} style={styles.lightboxSlide}>
+                <Image source={{ uri: photo.uri }} style={styles.lightboxImage} resizeMode="contain" />
+              </View>
+            ))}
+          </ScrollView>
+          {photos.length > 1 && (
+            <View style={styles.lightboxCounter}>
+              <Text style={styles.lightboxCounterText}>{lightboxIndex + 1} / {photos.length}</Text>
+            </View>
+          )}
+          <TouchableOpacity
+            style={styles.lightboxCloseBtn}
+            onPress={() => setLightboxVisible(false)}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <X size={22} color={colors.white} />
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -780,4 +829,11 @@ const styles = StyleSheet.create({
     ...typography.button,
     color: colors.white,
   },
+  lightboxContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center' },
+  lightboxScroll: { height: Dimensions.get('window').height },
+  lightboxSlide: { width: SCREEN_WIDTH, height: Dimensions.get('window').height, justifyContent: 'center', alignItems: 'center' },
+  lightboxImage: { width: SCREEN_WIDTH, height: Dimensions.get('window').height },
+  lightboxCloseBtn: { position: 'absolute', top: spacing.xxl, right: spacing.lg, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
+  lightboxCounter: { position: 'absolute', top: spacing.xxl, left: 0, right: 0, alignItems: 'center' },
+  lightboxCounterText: { ...typography.smallBold, color: 'rgba(255,255,255,0.7)' },
 });

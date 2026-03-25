@@ -48,7 +48,11 @@ export default function MarkerPreviewSheet({ lactario, onViewDetail, onDismiss }
 
         <View style={styles.nameRow}>
           <Text style={styles.name} numberOfLines={1}>{lactario.name}</Text>
-          {lactario.placeType && (
+          {(lactario as any).floorCount > 0 ? (
+            <View style={[styles.typeBadge, { backgroundColor: '#1e293b' }]}>
+              <Text style={[styles.typeBadgeText, { color: '#f8fafc' }]}>🏢 Edificio</Text>
+            </View>
+          ) : lactario.placeType ? (
             <View style={[styles.typeBadge,
               lactario.placeType === 'CAMBIADOR' && styles.typeBadgeCambiador,
               lactario.placeType === 'BANO_FAMILIAR' && { backgroundColor: '#ccfbf1' },
@@ -62,7 +66,7 @@ export default function MarkerPreviewSheet({ lactario, onViewDetail, onDismiss }
                 {lactario.placeType === 'CAMBIADOR' ? '🚼 Cambiador' : lactario.placeType === 'BANO_FAMILIAR' ? '🚻 Baño Familiar' : lactario.placeType === 'PUNTO_INTERES' ? '⭐ Punto de Interés' : '🤱 Lactario'}
               </Text>
             </View>
-          )}
+          ) : null}
         </View>
 
         {lactario.isPrivate && (

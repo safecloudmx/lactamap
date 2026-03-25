@@ -474,7 +474,12 @@ export default function RoomDetailScreen() {
 
           {/* Type + Verified */}
           <View style={styles.badgeRow}>
-            {room.placeType && (
+            {/* Show "Edificio" badge if this is a building with floors */}
+            {((room.floors && room.floors.length > 0) || (room.floorCount && room.floorCount > 0)) ? (
+              <View style={styles.placeTypeBadgeEdificio}>
+                <Text style={styles.placeTypeBadgeTextEdificio}>🏢 Edificio</Text>
+              </View>
+            ) : room.placeType ? (
               <View style={[
                 styles.placeTypeBadge,
                 room.placeType === 'CAMBIADOR' && styles.placeTypeBadgeCambiador,
@@ -493,7 +498,7 @@ export default function RoomDetailScreen() {
                     : '🤱 Lactario'}
                 </Text>
               </View>
-            )}
+            ) : null}
             {room.isVerified && (
               <View style={styles.verifiedTag}>
                 <BadgeCheck size={14} color={colors.success} />
@@ -658,7 +663,7 @@ export default function RoomDetailScreen() {
           )}
 
           {/* Add Floor Button (for parent lactarios without parentId) */}
-          {!room.parentId && !isGuest && canEdit && (
+          {!room.parentId && !isGuest && (
             <TouchableOpacity
               style={styles.addFloorBtn}
               onPress={() => navigation.navigate('AddFloor', { parentId: room.id, parentName: room.name })}
@@ -1061,6 +1066,18 @@ const styles = StyleSheet.create({
   },
   placeTypeBadgePuntoInteres: {
     backgroundColor: '#fef3c7',
+  },
+  placeTypeBadgeEdificio: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.full,
+    backgroundColor: '#1e293b',
+  },
+  placeTypeBadgeTextEdificio: {
+    ...typography.captionBold,
+    color: '#f8fafc',
   },
   placeTypeBadgeText: {
     ...typography.captionBold,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Home, Map, Compass, Stethoscope, User } from 'lucide-react-native';
+import { Home, Map, Compass, ToolCaseIcon, User } from 'lucide-react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { colors, spacing, typography, shadows } from '../theme';
 
@@ -9,7 +9,7 @@ const TAB_CONFIG: Record<string, { icon: any; label: string }> = {
   Inicio: { icon: Home, label: 'Inicio' },
   Mapa: { icon: Map, label: 'Mapa' },
   Explorar: { icon: Compass, label: 'Explorar' },
-  Recursos: { icon: Stethoscope, label: 'Recursos' },
+  Recursos: { icon: ToolCaseIcon, label: 'Recursos' },
   Perfil: { icon: User, label: 'Perfil' },
 };
 

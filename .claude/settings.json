@@ -15,6 +15,17 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"systemMessage\":\"RECORDATORIO: Si hubo cambios significativos en esta sesión (nuevos archivos, rutas, modelos, pantallas), actualiza CLAUDE.md antes de terminar.\"}'",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }

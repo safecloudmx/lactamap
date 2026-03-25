@@ -2,7 +2,7 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["driverAdapters"]
 }
 
@@ -62,10 +62,10 @@ enum RejectionReason {
 }
 
 model User {
-  id            String   @id @default(uuid())
-  email         String   @unique
-  name          String?
-  passwordHash  String
+  id                  String        @id @default(uuid())
+  email               String        @unique
+  name                String?
+  passwordHash        String
   role                Role          @default(VISITOR)
   status              AccountStatus @default(ACTIVE)
   points              Int           @default(0)
@@ -81,7 +81,7 @@ model User {
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
-  incorrectContentCount Int           @default(0)
+  incorrectContentCount Int     @default(0)
   avatarUrl             String?
 
   // Relations
@@ -90,6 +90,9 @@ model User {
   babies                Baby[]
   nursingSessions       NursingSession[]
   pumpingSessions       PumpingSession[]
+  sleepSessions         SleepSession[]
+  diaperRecords         DiaperRecord[]
+  growthRecords         GrowthRecord[]
   maintenanceReports    MaintenanceReport[]
   badges                UserBadge[]
   submissions           LactarioSubmission[]   @relation("SubmittedBy")
@@ -100,56 +103,56 @@ model User {
 }
 
 model Badge {
-  id          String      @id @default(uuid())
-  code        String      @unique
-  name        String
-  description String
-  icon        String      // Lucide icon name or URL
-  requiredPoints Int      @default(0)
-  
-  users       UserBadge[]
+  id             String @id @default(uuid())
+  code           String @unique
+  name           String
+  description    String
+  icon           String // Lucide icon name or URL
+  requiredPoints Int    @default(0)
+
+  users UserBadge[]
 }
 
 model UserBadge {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  badgeId   String
-  badge     Badge    @relation(fields: [badgeId], references: [id])
-  earnedAt  DateTime @default(now())
+  id       String   @id @default(uuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id])
+  badgeId  String
+  badge    Badge    @relation(fields: [badgeId], references: [id])
+  earnedAt DateTime @default(now())
 
   @@unique([userId, badgeId])
 }
 
 model Lactario {
-  id              String   @id @default(uuid())
-  name            String
-  latitude        Decimal?
-  longitude       Decimal?
-  
-  address         String?
-  description     String?
-  ownerId         String?
-  owner           User?    @relation("OwnerLactarios", fields: [ownerId], references: [id])
-  
-  verifiedType    VerificationType @default(NONE)
-  verificationCount Int            @default(0)
-  status          LactarioStatus   @default(PENDING)
-  avgRating       Decimal          @default(0.0)
-  tags            String[]         @default([])
-  placeType       String           @default("LACTARIO")
-  genderAccess    String           @default("Unisex/Familiar")
-  isPrivate       Boolean          @default(false)
-  imageUrl        String?
+  id        String   @id @default(uuid())
+  name      String
+  latitude  Decimal?
+  longitude Decimal?
+
+  address     String?
+  description String?
+  ownerId     String?
+  owner       User?   @relation("OwnerLactarios", fields: [ownerId], references: [id])
+
+  verifiedType      VerificationType @default(NONE)
+  verificationCount Int              @default(0)
+  status            LactarioStatus   @default(PENDING)
+  avgRating         Decimal          @default(0.0)
+  tags              String[]         @default([])
+  placeType         String           @default("LACTARIO")
+  genderAccess      String           @default("Unisex/Familiar")
+  isPrivate         Boolean          @default(false)
+  imageUrl          String?
 
   // Multi-floor support
-  parentId        String?
-  parent          Lactario?  @relation("LactarioFloors", fields: [parentId], references: [id])
-  floors          Lactario[] @relation("LactarioFloors")
-  floor           String?
+  parentId String?
+  parent   Lactario?  @relation("LactarioFloors", fields: [parentId], references: [id])
+  floors   Lactario[] @relation("LactarioFloors")
+  floor    String?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
   amenities          LactarioAmenity?
@@ -161,28 +164,28 @@ model Lactario {
 }
 
 model LactarioAmenity {
-  id               String   @id @default(uuid())
-  lactarioId       String   @unique
-  lactario         Lactario @relation(fields: [lactarioId], references: [id])
-  
-  hasFridge        Boolean  @default(false)
-  hasPower         Boolean  @default(false)
-  hasSink          Boolean  @default(false)
-  hasPrivacy       Boolean  @default(false)
-  hasNursingChair  Boolean  @default(false)
-  isAccessible     Boolean  @default(false)
-  hasAC            Boolean  @default(false)
+  id         String   @id @default(uuid())
+  lactarioId String   @unique
+  lactario   Lactario @relation(fields: [lactarioId], references: [id])
+
+  hasFridge         Boolean @default(false)
+  hasPower          Boolean @default(false)
+  hasSink           Boolean @default(false)
+  hasPrivacy        Boolean @default(false)
+  hasNursingChair   Boolean @default(false)
+  isAccessible      Boolean @default(false)
+  hasAC             Boolean @default(false)
   hasStrollerAccess Boolean @default(false)
-  isInBathroom     Boolean  @default(false)
-  isOpen           Boolean  @default(false)
+  isInBathroom      Boolean @default(false)
+  isOpen            Boolean @default(false)
 }
 
 model Review {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  lactarioId  String
-  lactario    Lactario @relation(fields: [lactarioId], references: [id])
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  lactarioId String
+  lactario   Lactario @relation(fields: [lactarioId], references: [id])
 
   rating      Int
   comment     String?
@@ -190,7 +193,7 @@ model Review {
   isHidden    Boolean  @default(false)
   createdAt   DateTime @default(now())
 
-  reports     ReviewReport[]
+  reports ReviewReport[]
 
   @@unique([userId, lactarioId])
 }
@@ -208,100 +211,104 @@ model ReviewReport {
 }
 
 model Photo {
-  id               String   @id @default(uuid())
+  id               String           @id @default(uuid())
   lactarioId       String
-  lactario         Lactario @relation(fields: [lactarioId], references: [id])
+  lactario         Lactario         @relation(fields: [lactarioId], references: [id])
   url              String
   moderationStatus ModerationStatus @default(PENDING)
-  createdAt        DateTime @default(now())
+  createdAt        DateTime         @default(now())
 }
 
 model Baby {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
   name      String
   birthDate DateTime?
+  avatarUrl String?
   notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
-  nursingSessions  NursingSession[]
-  pumpingSessions  PumpingSession[]
+  nursingSessions NursingSession[]
+  pumpingSessions PumpingSession[]
+  sleepSessions   SleepSession[]
+  diaperRecords   DiaperRecord[]
+  growthRecords   GrowthRecord[]
 }
 
 model NursingSession {
-  id             String   @id @default(uuid())
-  userId         String
-  user           User     @relation(fields: [userId], references: [id])
-  babyId         String?
-  baby           Baby?    @relation(fields: [babyId], references: [id])
+  id     String  @id @default(uuid())
+  userId String
+  user   User    @relation(fields: [userId], references: [id])
+  babyId String?
+  baby   Baby?   @relation(fields: [babyId], references: [id])
 
   startedAt      DateTime
   endedAt        DateTime
-  leftDuration   Int      // seconds
-  rightDuration  Int      // seconds
-  totalDuration  Int      // seconds
+  leftDuration   Int // seconds
+  rightDuration  Int // seconds
+  totalDuration  Int // seconds
   totalPauseTime Int      @default(0)
-  lastSide       String   // left, right, both
+  lastSide       String // left, right, both
   notes          String?
 
-  createdAt      DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 model MaintenanceReport {
-  id           String   @id @default(uuid())
-  lactarioId   String
-  lactario     Lactario @relation(fields: [lactarioId], references: [id])
-  userId       String
-  user         User     @relation(fields: [userId], references: [id])
-  
-  issueType    String
-  description  String?
-  status       String   @default("OPEN") // OPEN, RESOLVED
-  
-  createdAt    DateTime @default(now())
+  id         String   @id @default(uuid())
+  lactarioId String
+  lactario   Lactario @relation(fields: [lactarioId], references: [id])
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+
+  issueType   String
+  description String?
+  status      String  @default("OPEN") // OPEN, RESOLVED
+
+  createdAt DateTime @default(now())
 }
 
 model LactarioSubmission {
-  id              String            @id @default(uuid())
-  lactarioId      String            @unique
-  lactario        Lactario          @relation(fields: [lactarioId], references: [id], onDelete: Cascade)
+  id         String   @id @default(uuid())
+  lactarioId String   @unique
+  lactario   Lactario @relation(fields: [lactarioId], references: [id], onDelete: Cascade)
 
-  submittedById   String
-  submittedBy     User              @relation("SubmittedBy", fields: [submittedById], references: [id])
+  submittedById String
+  submittedBy   User   @relation("SubmittedBy", fields: [submittedById], references: [id])
 
-  status          ModerationStatus  @default(PENDING)
+  status          ModerationStatus @default(PENDING)
   rejectionReason RejectionReason?
   rejectionNotes  String?
 
-  reviewedById    String?
-  reviewedBy      User?             @relation("ReviewedBy", fields: [reviewedById], references: [id])
-  reviewedAt      DateTime?
+  reviewedById String?
+  reviewedBy   User?     @relation("ReviewedBy", fields: [reviewedById], references: [id])
+  reviewedAt   DateTime?
 
-  createdAt       DateTime          @default(now())
+  createdAt DateTime @default(now())
 }
 
 model LactarioEditProposal {
-  id            String           @id @default(uuid())
-  lactarioId    String
-  lactario      Lactario         @relation(fields: [lactarioId], references: [id], onDelete: Cascade)
-  proposedById  String
-  proposedBy    User             @relation("ProposedEdits", fields: [proposedById], references: [id])
+  id           String   @id @default(uuid())
+  lactarioId   String
+  lactario     Lactario @relation(fields: [lactarioId], references: [id], onDelete: Cascade)
+  proposedById String
+  proposedBy   User     @relation("ProposedEdits", fields: [proposedById], references: [id])
 
-  name          String?
-  address       String?
-  description   String?
-  amenities     String[]         @default([])
-  tags          String[]         @default([])
+  name        String?
+  address     String?
+  description String?
+  amenities   String[] @default([])
+  tags        String[] @default([])
 
-  status        ModerationStatus @default(PENDING)
-  reviewedById  String?
-  reviewedBy    User?            @relation("ReviewedEdits", fields: [reviewedById], references: [id])
-  reviewedAt    DateTime?
+  status         ModerationStatus @default(PENDING)
+  reviewedById   String?
+  reviewedBy     User?            @relation("ReviewedEdits", fields: [reviewedById], references: [id])
+  reviewedAt     DateTime?
   rejectionNotes String?
 
-  createdAt     DateTime         @default(now())
+  createdAt DateTime @default(now())
 }
 
 model ModerationQueue {
@@ -314,21 +321,21 @@ model ModerationQueue {
 }
 
 model PumpingSession {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  babyId    String?
-  baby      Baby?    @relation(fields: [babyId], references: [id])
+  id     String  @id @default(uuid())
+  userId String
+  user   User    @relation(fields: [userId], references: [id])
+  babyId String?
+  baby   Baby?   @relation(fields: [babyId], references: [id])
 
-  side      String   // LEFT, RIGHT, BOTH
-  pumpedAt  DateTime
-  amountMl  Decimal  @default(0)
-  notes     String?
+  side     String // LEFT, RIGHT, BOTH
+  pumpedAt DateTime
+  amountMl Decimal  @default(0)
+  notes    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  photos    PumpingPhoto[]
+  photos PumpingPhoto[]
 }
 
 model PumpingPhoto {
@@ -337,4 +344,63 @@ model PumpingPhoto {
   pumpingSession   PumpingSession @relation(fields: [pumpingSessionId], references: [id], onDelete: Cascade)
   url              String
   createdAt        DateTime       @default(now())
+}
+
+model SleepSession {
+  id     String  @id @default(uuid())
+  userId String
+  user   User    @relation(fields: [userId], references: [id])
+  babyId String?
+  baby   Baby?   @relation(fields: [babyId], references: [id])
+
+  startedAt      DateTime
+  endedAt        DateTime
+  totalDuration  Int // seconds
+  totalPauseTime Int      @default(0)
+  notes          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DiaperRecord {
+  id     String  @id @default(uuid())
+  userId String
+  user   User    @relation(fields: [userId], references: [id])
+  babyId String?
+  baby   Baby?   @relation(fields: [babyId], references: [id])
+
+  type      String // wet, dirty, both
+  changedAt DateTime
+  notes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model GrowthRecord {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+  babyId String
+  baby   Baby   @relation(fields: [babyId], references: [id])
+
+  measuredAt          DateTime
+  weightKg            Decimal?
+  heightCm            Decimal?
+  headCircumferenceCm Decimal?
+  notes               String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  photos GrowthPhoto[]
+}
+
+model GrowthPhoto {
+  id             String       @id @default(uuid())
+  growthRecordId String
+  growthRecord   GrowthRecord @relation(fields: [growthRecordId], references: [id], onDelete: Cascade)
+  url            String
+  createdAt      DateTime     @default(now())
 }

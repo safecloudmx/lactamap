@@ -125,7 +125,30 @@ export interface EditProposal {
 export interface Baby {
   id: string;
   name: string;
+  birthDate?: string | null;
+  avatarUrl?: string | null;
+  notes?: string | null;
   createdAt: string;
+}
+
+export interface GrowthPhoto {
+  id: string;
+  growthRecordId: string;
+  url: string;
+  createdAt: string;
+}
+
+export interface GrowthRecord {
+  id: string;
+  babyId: string;
+  measuredAt: string;
+  weightKg: number | null;
+  heightCm: number | null;
+  headCircumferenceCm: number | null;
+  notes: string | null;
+  photos: GrowthPhoto[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type FeedingSide = 'left' | 'right' | 'both';

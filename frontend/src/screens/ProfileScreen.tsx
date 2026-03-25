@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput,
+  TextInput, Image,
 } from 'react-native';
 import { confirmAlert, infoAlert } from '../services/crossPlatformAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -260,39 +260,34 @@ export default function ProfileScreen() {
           </View>
         ) : (
           babies.map((baby) => (
-            <View key={baby.id} style={styles.babyCard}>
+            <TouchableOpacity
+              key={baby.id}
+              style={styles.babyCard}
+              onPress={() => navigation.navigate('BabyDetail', { babyId: baby.id })}
+              activeOpacity={0.7}
+            >
               <View style={styles.babyCardLeft}>
-                <View style={styles.babyAvatar}>
-                  <Text style={styles.babyAvatarText}>
-                    {baby.name.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
+                {baby.avatarUrl ? (
+                  <Image source={{ uri: baby.avatarUrl }} style={styles.babyAvatarImg} />
+                ) : (
+                  <View style={styles.babyAvatar}>
+                    <Text style={styles.babyAvatarText}>
+                      {baby.name.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
                 <View style={styles.babyCardInfo}>
                   <Text style={styles.babyCardName}>{baby.name}</Text>
                   <Text style={styles.babyCardDate}>
-                    Registrado {new Date(baby.createdAt).toLocaleDateString('es-MX', {
-                      day: '2-digit', month: 'short', year: 'numeric',
-                    })}
+                    {baby.birthDate
+                      ? `Nacido ${new Date(baby.birthDate).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                      : `Registrado ${new Date(baby.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                    }
                   </Text>
                 </View>
               </View>
-              <View style={styles.babyCardActions}>
-                <TouchableOpacity
-                  onPress={() => startEditBaby(baby)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={styles.babyActionBtn}
-                >
-                  <Pencil size={16} color={colors.primary[500]} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => handleDeleteBaby(baby)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={styles.babyActionBtn}
-                >
-                  <Trash2 size={16} color={colors.error} />
-                </TouchableOpacity>
-              </View>
-            </View>
+              <ChevronRight size={18} color={colors.slate[400]} />
+            </TouchableOpacity>
           ))
         )}
       </View>
@@ -521,6 +516,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary[100],
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  babyAvatarImg: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   babyAvatarText: {
     ...typography.bodyBold,

@@ -22,13 +22,13 @@ PGPASSWORD='<ver .env>' psql -h db-admin.safecloud.mx -p 5432 -U usr_lactamap_sy
 Backend: Express + Prisma + PostgreSQL + S3 (Sharp→WebP). Frontend: React Native Expo 54 (web+native). Auth: JWT con `userId` (NO `id`). Email: Resend + SMTP fallback.
 
 ## Endpoints API (`/api/v1/`)
-auth, lactarios, reviews, users, babies, nursing-sessions, pumping-sessions, submissions, edit-proposals, photos (ver archivos en `backend/src/routes/`)
+auth, lactarios, reviews, users, babies, nursing-sessions, pumping-sessions, sleep-sessions, diaper-records, growth-records, submissions, edit-proposals, photos (ver archivos en `backend/src/routes/`)
 
 ## Modelos Prisma
-User, Lactario, LactarioAmenity, Review, ReviewReport, Baby, NursingSession, PumpingSession, PumpingPhoto, Photo, Badge, UserBadge, LactarioSubmission, LactarioEditProposal, MaintenanceReport, ModerationQueue
+User, Lactario, LactarioAmenity, Review, ReviewReport, Baby, NursingSession, PumpingSession, PumpingPhoto, SleepSession, DiaperRecord, GrowthRecord, GrowthPhoto, Photo, Badge, UserBadge, LactarioSubmission, LactarioEditProposal, MaintenanceReport, ModerationQueue
 
 ## Pantallas Frontend
-Login, Dashboard, HomeScreen(mapa), Explore, Profile, RoomDetail, AddRoom, EditRoom, NursingTimer, PumpingLog, PumpingHistory, FeedingHistory, FeedingSessionDetail, EditProfile, MyContributions, AdminReview, Leaderboard, Resources, Settings, About
+Login, Dashboard, HomeScreen(mapa), Explore, Profile, RoomDetail, AddRoom, EditRoom, NursingTimer, PumpingLog, PumpingHistory, FeedingHistory, FeedingSessionDetail, EditProfile, MyContributions, AdminReview, Leaderboard, Resources, Settings, About, BabyDetail, BabyEdit, GrowthAdd, SleepTimer, SleepHistory, SleepSessionDetail, DiaperLog, DiaperHistory, DiaperRecordDetail, RelaxingSounds, AddFloor
 
 ## Patrones clave
 - Imágenes: ImagePicker → Sharp resize → WebP → S3 → signUrl() (6h TTL, 1h cache)
@@ -36,3 +36,6 @@ Login, Dashboard, HomeScreen(mapa), Explore, Profile, RoomDetail, AddRoom, EditR
 - Maps: `.web.tsx` (Leaflet iframe) / `.native.tsx` (react-native-maps)
 - Roles: VISITOR < CONTRIBUTOR < DISTINGUISHED < ELITE < OWNER < ADMIN
 - ImagePicker/Location: try/catch dynamic require para graceful degradation
+- Baby tracking: BabyDetailScreen hub → growth records, nursing, pumping, sleep, diaper filtered by babyId
+- Sleep/Diaper: hybrid storage (server API + local AsyncStorage fallback via hasToken() check)
+- Baby avatars: same S3 pipeline (Sharp 400x400 cover → WebP → S3)

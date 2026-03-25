@@ -394,4 +394,166 @@ export const deletePumpingPhoto = async (sessionId: string, photoId: string) => 
   return response.data;
 };
 
+// === Baby Avatar ===
+
+export const uploadBabyAvatar = async (babyId: string, imageUri: string) => {
+  const token = await AsyncStorage.getItem('@Auth:token');
+  const formData = new FormData();
+
+  if (typeof document !== 'undefined') {
+    const res = await fetch(imageUri);
+    const blob = await res.blob();
+    formData.append('avatar', blob, 'avatar.jpg');
+  } else {
+    formData.append('avatar', { uri: imageUri, name: 'avatar.jpg', type: 'image/jpeg' } as any);
+  }
+
+  const response = await fetch(`${BASE_URL}/babies/${babyId}/avatar`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (!response.ok) throw new Error('Error uploading baby avatar');
+  return response.json();
+};
+
+// === Sleep Sessions ===
+
+export const getSleepSessionsFromServer = async (filters?: { babyId?: string; date?: string }) => {
+  const response = await api.get('/sleep-sessions', { params: filters });
+  return response.data;
+};
+
+export const getSleepSessionFromServer = async (id: string) => {
+  const response = await api.get(`/sleep-sessions/${id}`);
+  return response.data;
+};
+
+export const createSleepSessionOnServer = async (data: {
+  babyId?: string;
+  startedAt: string;
+  endedAt: string;
+  totalDuration: number;
+  totalPauseTime: number;
+  notes?: string;
+}) => {
+  const response = await api.post('/sleep-sessions', data);
+  return response.data;
+};
+
+export const updateSleepSessionOnServer = async (id: string, data: {
+  babyId?: string;
+  startedAt?: string;
+  endedAt?: string;
+  totalDuration?: number;
+  totalPauseTime?: number;
+  notes?: string;
+}) => {
+  const response = await api.put(`/sleep-sessions/${id}`, data);
+  return response.data;
+};
+
+export const deleteSleepSessionFromServer = async (id: string) => {
+  const response = await api.delete(`/sleep-sessions/${id}`);
+  return response.data;
+};
+
+// === Diaper Records ===
+
+export const getDiaperRecordsFromServer = async (filters?: { babyId?: string; date?: string }) => {
+  const response = await api.get('/diaper-records', { params: filters });
+  return response.data;
+};
+
+export const getDiaperRecordFromServer = async (id: string) => {
+  const response = await api.get(`/diaper-records/${id}`);
+  return response.data;
+};
+
+export const createDiaperRecordOnServer = async (data: {
+  babyId?: string;
+  type: string;
+  changedAt: string;
+  notes?: string;
+}) => {
+  const response = await api.post('/diaper-records', data);
+  return response.data;
+};
+
+export const updateDiaperRecordOnServer = async (id: string, data: {
+  babyId?: string;
+  type?: string;
+  changedAt?: string;
+  notes?: string;
+}) => {
+  const response = await api.put(`/diaper-records/${id}`, data);
+  return response.data;
+};
+
+export const deleteDiaperRecordFromServer = async (id: string) => {
+  const response = await api.delete(`/diaper-records/${id}`);
+  return response.data;
+};
+
+// === Growth Records ===
+
+export const getGrowthRecords = async (babyId: string) => {
+  const response = await api.get('/growth-records', { params: { babyId } });
+  return response.data;
+};
+
+export const createGrowthRecord = async (data: {
+  babyId: string;
+  measuredAt: string;
+  weightKg?: number | null;
+  heightCm?: number | null;
+  headCircumferenceCm?: number | null;
+  notes?: string;
+}) => {
+  const response = await api.post('/growth-records', data);
+  return response.data;
+};
+
+export const updateGrowthRecord = async (id: string, data: {
+  measuredAt?: string;
+  weightKg?: number | null;
+  heightCm?: number | null;
+  headCircumferenceCm?: number | null;
+  notes?: string;
+}) => {
+  const response = await api.put(`/growth-records/${id}`, data);
+  return response.data;
+};
+
+export const deleteGrowthRecord = async (id: string) => {
+  const response = await api.delete(`/growth-records/${id}`);
+  return response.data;
+};
+
+export const uploadGrowthPhoto = async (recordId: string, imageUri: string) => {
+  const token = await AsyncStorage.getItem('@Auth:token');
+  const formData = new FormData();
+
+  if (typeof document !== 'undefined') {
+    const res = await fetch(imageUri);
+    const blob = await res.blob();
+    formData.append('photo', blob, 'photo.jpg');
+  } else {
+    formData.append('photo', { uri: imageUri, name: 'photo.jpg', type: 'image/jpeg' } as any);
+  }
+
+  const response = await fetch(`${BASE_URL}/growth-records/${recordId}/photos`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (!response.ok) throw new Error('Error uploading growth photo');
+  return response.json();
+};
+
+export const deleteGrowthPhoto = async (recordId: string, photoId: string) => {
+  const response = await api.delete(`/growth-records/${recordId}/photos/${photoId}`);
+  return response.data;
+};
+
 export default api;

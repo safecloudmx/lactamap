@@ -49,6 +49,9 @@ const linking: LinkingOptions<any> = {
       DiaperHistory: 'historial-panales',
       DiaperRecordDetail: 'registro-panal',
       RelaxingSounds: 'sonidos',
+      BabyDetail: 'bebe/:babyId',
+      BabyEdit: 'bebe/:babyId/editar',
+      GrowthAdd: 'bebe/:babyId/crecimiento',
     },
   },
 };
@@ -81,6 +84,9 @@ import DiaperHistoryScreen from '../screens/DiaperHistoryScreen';
 import DiaperRecordDetailScreen from '../screens/DiaperRecordDetailScreen';
 import RelaxingSoundsScreen from '../screens/RelaxingSoundsScreen';
 import AddFloorScreen from '../screens/AddFloorScreen';
+import BabyDetailScreen from '../screens/BabyDetailScreen';
+import BabyEditScreen from '../screens/BabyEditScreen';
+import GrowthAddScreen from '../screens/GrowthAddScreen';
 
 import CustomTabBar from '../components/CustomTabBar';
 import DrawerContent from './DrawerContent';
@@ -235,6 +241,21 @@ export const AppNavigator = () => {
               name="AddFloor"
               component={AddFloorScreen}
               options={{ presentation: 'modal' }}
+            />
+            <Stack.Screen
+              name="BabyDetail"
+              component={BabyDetailScreen}
+              options={{ presentation: 'card' }}
+            />
+            <Stack.Screen
+              name="BabyEdit"
+              component={BabyEditScreen}
+              options={{ presentation: 'card' }}
+            />
+            <Stack.Screen
+              name="GrowthAdd"
+              component={GrowthAddScreen}
+              options={{ presentation: 'card' }}
             />
             <Stack.Screen
               name="EditRoom"

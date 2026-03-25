@@ -12,6 +12,9 @@ import submissionsRoutes from './routes/submissions.routes';
 import editProposalsRoutes from './routes/editProposals.routes';
 import photosRoutes from './routes/photos.routes';
 import pumpingSessionsRoutes from './routes/pumpingSessions.routes';
+import sleepSessionsRoutes from './routes/sleepSessions.routes';
+import diaperRecordsRoutes from './routes/diaperRecords.routes';
+import growthRecordsRoutes from './routes/growthRecords.routes';
 
 dotenv.config();
 
@@ -62,6 +65,9 @@ app.use('/api/v1/submissions', submissionsRoutes);
 app.use('/api/v1/edit-proposals', editProposalsRoutes);
 app.use('/api/v1', photosRoutes);
 app.use('/api/v1/pumping-sessions', pumpingSessionsRoutes);
+app.use('/api/v1/sleep-sessions', sleepSessionsRoutes);
+app.use('/api/v1/diaper-records', diaperRecordsRoutes);
+app.use('/api/v1/growth-records', growthRecordsRoutes);
 
 // Health check
 app.get('/', (_req, res) => {

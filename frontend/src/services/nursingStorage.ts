@@ -26,6 +26,9 @@ function mapServerBaby(b: any): Baby {
   return {
     id: b.id,
     name: b.name,
+    birthDate: b.birthDate ?? null,
+    avatarUrl: b.avatarUrl ?? null,
+    notes: b.notes ?? null,
     createdAt: b.createdAt,
   };
 }
@@ -207,7 +210,11 @@ export async function getBabies(): Promise<Baby[]> {
 
 export async function saveBaby(baby: Baby): Promise<Baby> {
   if (await hasToken()) {
-    const serverBaby = await createBabyOnServer({ name: baby.name });
+    const serverBaby = await createBabyOnServer({
+      name: baby.name,
+      birthDate: baby.birthDate || undefined,
+      notes: baby.notes || undefined,
+    });
     const mapped = mapServerBaby(serverBaby);
     // Update local cache
     const raw = await AsyncStorage.getItem(KEYS.babies);
@@ -225,7 +232,11 @@ export async function saveBaby(baby: Baby): Promise<Baby> {
 export async function updateBaby(id: string, updates: Partial<Baby>): Promise<void> {
   try {
     if (await hasToken()) {
-      await updateBabyOnServer(id, { name: updates.name });
+      await updateBabyOnServer(id, {
+        name: updates.name,
+        birthDate: updates.birthDate || undefined,
+        notes: updates.notes || undefined,
+      });
       const raw = await AsyncStorage.getItem(KEYS.babies);
       if (raw) {
         const babies: Baby[] = JSON.parse(raw);

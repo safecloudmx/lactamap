@@ -139,6 +139,7 @@ export default function AddFloorScreen() {
               { key: 'LACTARIO' as PlaceType, label: '🤱 Lactario' },
               { key: 'CAMBIADOR' as PlaceType, label: '🚼 Cambiador' },
               { key: 'BANO_FAMILIAR' as PlaceType, label: '🚻 Baño Familiar' },
+              { key: 'PUNTO_INTERES' as PlaceType, label: '⭐ Punto de Interés' },
             ] as const).map(({ key, label }) => (
               <Chip
                 key={key}

@@ -21,6 +21,7 @@ const linking: LinkingOptions<any> = {
               Inicio: 'inicio',
               Mapa: 'mapa',
               Explorar: 'explorar',
+              Recursos: 'recursos',
               Perfil: 'perfil',
             },
           },
@@ -36,7 +37,6 @@ const linking: LinkingOptions<any> = {
       EditRoom: 'editar-lugar',
       EditProfile: 'editar-perfil',
       NursingTimer: 'lactancia',
-      Resources: 'recursos',
       FeedingHistory: 'historial-alimentacion',
       FeedingSessionDetail: 'sesion-alimentacion',
       AdminReview: 'admin-review',
@@ -107,6 +107,7 @@ function HomeTabs() {
       <Tab.Screen name="Inicio" component={DashboardScreen} />
       <Tab.Screen name="Mapa" component={MapScreenWithFAB} />
       <Tab.Screen name="Explorar" component={ExploreScreen} />
+      <Tab.Screen name="Recursos" component={ResourcesScreen} />
       <Tab.Screen name="Perfil" component={ProfileScreen} />
     </Tab.Navigator>
   );
@@ -168,11 +169,6 @@ export const AppNavigator = () => {
             <Stack.Screen
               name="NursingTimer"
               component={NursingTimerScreen}
-              options={{ presentation: 'card' }}
-            />
-            <Stack.Screen
-              name="Resources"
-              component={ResourcesScreen}
               options={{ presentation: 'card' }}
             />
             <Stack.Screen

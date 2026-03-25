@@ -218,7 +218,7 @@ export default function PumpingHistoryScreen() {
         >
           <ArrowLeft size={24} color={colors.slate[800]} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Historial de Extracción</Text>
+        <Text style={styles.headerTitle}>Registro de Extracción</Text>
         <TouchableOpacity
           onPress={() => navigation.navigate('PumpingLog')}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}

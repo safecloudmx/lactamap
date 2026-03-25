@@ -62,7 +62,7 @@ export default function DrawerContent({ navigation }: DrawerContentComponentProp
     { icon: Compass, label: 'Explorar', tab: 'Explorar' },
     { icon: User, label: 'Mi Perfil', tab: 'Perfil' },
     { icon: FolderHeart, label: 'Mis Aportes', route: 'MyContributions' },
-    { icon: ToolCaseIcon, label: 'Recursos', route: 'Resources' },
+    { icon: ToolCaseIcon, label: 'Recursos', tab: 'Recursos' },
     ...(isAdminOrElite ? [{ icon: ShieldCheck, label: 'Revisión de Aportes', route: 'AdminReview', badge: pendingCount }] : []),
   ];
 

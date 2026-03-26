@@ -347,6 +347,9 @@ export const createPumpingSession = async (data: {
   amountMl: number;
   notes?: string;
   babyId?: string | null;
+  storageStatus?: string;
+  expirationDate?: string;
+  classification?: string | null;
 }) => {
   const response = await api.post('/pumping-sessions', data);
   return response.data;
@@ -358,6 +361,9 @@ export const updatePumpingSession = async (id: string, data: {
   amountMl?: number;
   notes?: string;
   babyId?: string | null;
+  storageStatus?: string;
+  expirationDate?: string | null;
+  classification?: string | null;
 }) => {
   const response = await api.put(`/pumping-sessions/${id}`, data);
   return response.data;
@@ -365,6 +371,19 @@ export const updatePumpingSession = async (id: string, data: {
 
 export const deletePumpingSession = async (id: string) => {
   const response = await api.delete(`/pumping-sessions/${id}`);
+  return response.data;
+};
+
+export const getPumpingSessionByFolio = async (folio: string) => {
+  const response = await api.get(`/pumping-sessions/folio/${encodeURIComponent(folio)}`);
+  return response.data;
+};
+
+export const updatePumpingStatusByFolio = async (folio: string, data: {
+  storageStatus: string;
+  comment?: string;
+}) => {
+  const response = await api.put(`/pumping-sessions/folio/${encodeURIComponent(folio)}/status`, data);
   return response.data;
 };
 

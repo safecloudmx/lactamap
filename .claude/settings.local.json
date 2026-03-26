@@ -16,5 +16,18 @@
       "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 3000,8081 | Select-Object -Property OwningProcess | ForEach-Object { Stop-Process -Id $_OwningProcess -Force }\")",
       "Bash(curl -s http://localhost:3000/api/v1/lactarios)"
     ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"systemMessage\": \"RECORDATORIO: Si hubo cambios significativos en esta sesión (nuevos archivos, rutas, modelos, pantallas), actualiza CLAUDE.md antes de terminar.\"}'",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
   }
 }

@@ -1,22 +1,25 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, SectionList,
-  ActivityIndicator, Image,
+  ActivityIndicator,
 } from 'react-native';
 import { confirmAlert } from '../services/crossPlatformAlert';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ArrowLeft, Plus, Trash2, Droplets, Pencil, ImageIcon, CalendarDays,
+  Snowflake, Thermometer, CheckCircle, QrCode,
 } from 'lucide-react-native';
 import { colors, spacing, typography, radii, shadows } from '../theme';
 import { PumpingSession, Baby } from '../types';
 import { getPumpingSessions, deletePumpingSession } from '../services/api';
 import { EmptyState } from '../components/ui';
+import ExpirationBadge from '../components/ExpirationBadge';
 import * as nursingStorage from '../services/nursingStorage';
 
 type Section = { title: string; totalMl: number; data: PumpingSession[] };
 type DateFilter = 'all' | 'today' | 'week' | 'month';
+type StatusFilter = 'all' | 'FROZEN' | 'REFRIGERATED' | 'CONSUMED' | 'EXPIRED';
 
 function getRelativeDateLabel(dateStr: string): string {
   const today = new Date();
@@ -65,6 +68,17 @@ function getSideColor(side: string): string {
   return colors.success;
 }
 
+function getStorageIcon(status: string) {
+  if (status === 'FROZEN') return { Icon: Snowflake, color: '#3b82f6' };
+  if (status === 'REFRIGERATED') return { Icon: Thermometer, color: '#06b6d4' };
+  return { Icon: CheckCircle, color: '#22c55e' };
+}
+
+function isExpired(session: PumpingSession): boolean {
+  if (!session.expirationDate || session.storageStatus === 'CONSUMED') return false;
+  return new Date(session.expirationDate) < new Date();
+}
+
 export default function PumpingHistoryScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
@@ -73,6 +87,7 @@ export default function PumpingHistoryScreen() {
   const [babies, setBabies] = useState<Baby[]>([]);
   const [filterBabyId, setFilterBabyId] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [loading, setLoading] = useState(true);
 
   const loadData = useCallback(async () => {
@@ -100,12 +115,10 @@ export default function PumpingHistoryScreen() {
   const filteredSessions = useMemo(() => {
     let result = sessions;
 
-    // Baby filter
     if (filterBabyId) {
       result = result.filter((s) => s.babyId === filterBabyId);
     }
 
-    // Date filter
     if (dateFilter !== 'all') {
       const now = new Date();
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -122,8 +135,16 @@ export default function PumpingHistoryScreen() {
       result = result.filter((s) => new Date(s.pumpedAt) >= cutoff);
     }
 
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'EXPIRED') {
+        result = result.filter(isExpired);
+      } else {
+        result = result.filter((s) => s.storageStatus === statusFilter);
+      }
+    }
+
     return result;
-  }, [sessions, filterBabyId, dateFilter]);
+  }, [sessions, filterBabyId, dateFilter, statusFilter]);
 
   const handleDelete = (session: PumpingSession) => {
     confirmAlert(
@@ -151,53 +172,95 @@ export default function PumpingHistoryScreen() {
   const renderSession = ({ item }: { item: PumpingSession }) => {
     const sideColor = getSideColor(item.side);
     const babyName = getBabyName(item.babyId);
+    const storage = getStorageIcon(item.storageStatus || 'FROZEN');
+    const StorageIcon = storage.Icon;
+
     return (
-      <TouchableOpacity
-        style={styles.sessionCard}
-        onPress={() => navigation.navigate('PumpingLog', { session: item })}
-        activeOpacity={0.7}
-      >
-        <View style={[styles.sideIcon, { backgroundColor: sideColor + '18' }]}>
-          <Droplets size={16} color={sideColor} />
-        </View>
-        <View style={styles.sessionContent}>
-          <View style={styles.sessionTopRow}>
-            <Text style={styles.sessionTime}>{formatTime(item.pumpedAt)}</Text>
-            <View style={[styles.sideBadge, { backgroundColor: sideColor + '18' }]}>
-              <Text style={[styles.sideBadgeText, { color: sideColor }]}>
-                {getSideLabel(item.side)}
-              </Text>
-            </View>
-            <Text style={styles.sessionAmount}>{item.amountMl} ml</Text>
+      <View style={styles.sessionCard}>
+        <TouchableOpacity
+          style={styles.sessionCardTop}
+          onPress={() => navigation.navigate('PumpingLog', { session: item })}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.sideIcon, { backgroundColor: sideColor + '18' }]}>
+            <Droplets size={16} color={sideColor} />
           </View>
-          {babyName && (
-            <Text style={styles.sessionBabyName}>{babyName}</Text>
-          )}
-          {item.notes && (
-            <Text style={styles.sessionNotes} numberOfLines={1}>{item.notes}</Text>
-          )}
-          {item.photos?.length > 0 && (
-            <View style={styles.sessionPhotosRow}>
-              <ImageIcon size={12} color={colors.slate[400]} />
-              <Text style={styles.sessionPhotosText}>{item.photos.length} foto{item.photos.length > 1 ? 's' : ''}</Text>
+          <View style={styles.sessionContent}>
+            <View style={styles.sessionTopRow}>
+              <Text style={styles.sessionTime}>{formatTime(item.pumpedAt)}</Text>
+              <View style={[styles.sideBadge, { backgroundColor: sideColor + '18' }]}>
+                <Text style={[styles.sideBadgeText, { color: sideColor }]}>
+                  {getSideLabel(item.side)}
+                </Text>
+              </View>
+              <Text style={styles.sessionAmount}>{item.amountMl} ml</Text>
             </View>
+
+            {/* Folio + Storage row */}
+            <View style={styles.sessionMetaRow}>
+              {item.folio && (
+                <Text style={styles.folioText}>{item.folio}</Text>
+              )}
+              <View style={[styles.storageMini, { backgroundColor: storage.color + '15' }]}>
+                <StorageIcon size={10} color={storage.color} />
+                <Text style={[styles.storageMiniText, { color: storage.color }]}>
+                  {item.storageStatus === 'FROZEN' ? 'Cong.' : item.storageStatus === 'REFRIGERATED' ? 'Refr.' : 'Cons.'}
+                </Text>
+              </View>
+              {item.storageStatus !== 'CONSUMED' && item.expirationDate && (
+                <ExpirationBadge
+                  expirationDate={item.expirationDate}
+                  storageStatus={item.storageStatus || 'FROZEN'}
+                  compact
+                />
+              )}
+            </View>
+
+            {babyName && (
+              <Text style={styles.sessionBabyName}>{babyName}</Text>
+            )}
+            {item.notes && (
+              <Text style={styles.sessionNotes} numberOfLines={1}>{item.notes}</Text>
+            )}
+            {item.photos?.length > 0 && (
+              <View style={styles.sessionPhotosRow}>
+                <ImageIcon size={12} color={colors.slate[400]} />
+                <Text style={styles.sessionPhotosText}>{item.photos.length} foto{item.photos.length > 1 ? 's' : ''}</Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+
+        {/* Action bar */}
+        <View style={styles.actionBar}>
+          {item.folio && (
+            <TouchableOpacity
+              style={styles.actionBarBtn}
+              onPress={() => navigation.navigate('PumpingFolioDetail', { folio: item.folio })}
+              activeOpacity={0.7}
+            >
+              <QrCode size={16} color={colors.info} />
+              <Text style={[styles.actionBarBtnText, { color: colors.info }]}>QR</Text>
+            </TouchableOpacity>
           )}
-        </View>
-        <View style={styles.sessionActions}>
           <TouchableOpacity
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.actionBarBtn}
             onPress={() => navigation.navigate('PumpingLog', { session: item })}
+            activeOpacity={0.7}
           >
-            <Pencil size={16} color={colors.slate[400]} />
+            <Pencil size={16} color={colors.slate[500]} />
+            <Text style={styles.actionBarBtnText}>Editar</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.actionBarBtn}
             onPress={() => handleDelete(item)}
+            activeOpacity={0.7}
           >
             <Trash2 size={16} color={colors.error} />
+            <Text style={[styles.actionBarBtnText, { color: colors.error }]}>Eliminar</Text>
           </TouchableOpacity>
         </View>
-      </TouchableOpacity>
+      </View>
     );
   };
 
@@ -270,6 +333,33 @@ export default function PumpingHistoryScreen() {
             onPress={() => setDateFilter(opt.key)}
           >
             <Text style={[styles.dateChipText, dateFilter === opt.key && styles.dateChipTextSelected]}>
+              {opt.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Status Filter */}
+      <View style={styles.statusFilterRow}>
+        {([
+          { key: 'all', label: 'Todos', color: colors.slate[500] },
+          { key: 'FROZEN', label: 'Congelado', color: '#3b82f6' },
+          { key: 'REFRIGERATED', label: 'Refrig.', color: '#06b6d4' },
+          { key: 'CONSUMED', label: 'Consumido', color: '#22c55e' },
+          { key: 'EXPIRED', label: 'Expirado', color: '#8b5cf6' },
+        ] as { key: StatusFilter; label: string; color: string }[]).map((opt) => (
+          <TouchableOpacity
+            key={opt.key}
+            style={[
+              styles.statusChip,
+              statusFilter === opt.key && { backgroundColor: opt.color + '15', borderColor: opt.color },
+            ]}
+            onPress={() => setStatusFilter(opt.key)}
+          >
+            <Text style={[
+              styles.statusChipText,
+              statusFilter === opt.key && { color: opt.color, fontWeight: '600' },
+            ]}>
               {opt.label}
             </Text>
           </TouchableOpacity>
@@ -403,6 +493,29 @@ const styles = StyleSheet.create({
     color: colors.info,
     fontWeight: '600',
   },
+  statusFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    gap: spacing.xs,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.slate[100],
+  },
+  statusChip: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.full,
+    borderWidth: 1,
+    borderColor: colors.slate[200],
+    backgroundColor: colors.white,
+  },
+  statusChipText: {
+    ...typography.caption,
+    color: colors.slate[500],
+    fontSize: 10,
+  },
   filterChipText: {
     ...typography.smallBold,
     color: colors.slate[600],
@@ -466,14 +579,17 @@ const styles = StyleSheet.create({
     color: colors.info,
   },
   sessionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: colors.white,
     borderRadius: radii.md,
-    padding: spacing.md,
     marginBottom: spacing.sm,
-    gap: spacing.md,
     ...shadows.sm,
+    overflow: 'hidden',
+  },
+  sessionCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    gap: spacing.md,
   },
   sideIcon: {
     width: 32,
@@ -509,6 +625,31 @@ const styles = StyleSheet.create({
     color: colors.slate[800],
     marginLeft: 'auto',
   },
+  sessionMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: 2,
+    flexWrap: 'wrap',
+  },
+  folioText: {
+    ...typography.caption,
+    color: colors.slate[400],
+    fontSize: 10,
+    fontFamily: 'monospace',
+  },
+  storageMini: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: radii.sm,
+  },
+  storageMiniText: {
+    fontSize: 9,
+    fontWeight: '600',
+  },
   sessionBabyName: {
     ...typography.caption,
     color: colors.info,
@@ -529,9 +670,23 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.slate[400],
   },
-  sessionActions: {
-    gap: spacing.md,
+  actionBar: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: colors.slate[100],
+  },
+  actionBarBtn: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm + 2,
+  },
+  actionBarBtnText: {
+    ...typography.caption,
+    color: colors.slate[500],
+    fontWeight: '600',
   },
   fab: {
     position: 'absolute',

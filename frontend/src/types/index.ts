@@ -154,6 +154,8 @@ export interface GrowthRecord {
 export type FeedingSide = 'left' | 'right' | 'both';
 
 export type PumpingSide = 'LEFT' | 'RIGHT' | 'BOTH';
+export type StorageStatus = 'FROZEN' | 'REFRIGERATED' | 'CONSUMED';
+export type PumpingClassification = 'DAY' | 'NIGHT';
 
 export interface PumpingPhoto {
   id: string;
@@ -161,15 +163,29 @@ export interface PumpingPhoto {
   createdAt: string;
 }
 
+export interface PumpingStatusHistoryEntry {
+  id: string;
+  fromStatus: string | null;
+  toStatus: string;
+  changedAt: string;
+  comment: string | null;
+}
+
 export interface PumpingSession {
   id: string;
   userId: string;
   babyId?: string | null;
+  baby?: { id: string; name: string } | null;
+  folio?: string | null;
   side: PumpingSide;
   pumpedAt: string;
   amountMl: number;
+  storageStatus?: StorageStatus;
+  expirationDate?: string | null;
+  classification?: PumpingClassification | null;
   notes: string | null;
   photos: PumpingPhoto[];
+  statusHistory?: PumpingStatusHistoryEntry[];
   createdAt: string;
   updatedAt: string;
 }

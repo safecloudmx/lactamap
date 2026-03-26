@@ -42,6 +42,7 @@ const linking: LinkingOptions<any> = {
       AdminReview: 'admin-review',
       PumpingLog: 'extraccion',
       PumpingHistory: 'historial-extraccion',
+      PumpingFolioDetail: 'folio-detalle',
       SleepTimer: 'sueno',
       SleepHistory: 'historial-sueno',
       SleepSessionDetail: 'sesion-sueno',
@@ -87,6 +88,7 @@ import AddFloorScreen from '../screens/AddFloorScreen';
 import BabyDetailScreen from '../screens/BabyDetailScreen';
 import BabyEditScreen from '../screens/BabyEditScreen';
 import GrowthAddScreen from '../screens/GrowthAddScreen';
+import PumpingFolioDetailScreen from '../screens/PumpingFolioDetailScreen';
 
 import CustomTabBar from '../components/CustomTabBar';
 import DrawerContent from './DrawerContent';
@@ -200,6 +202,11 @@ export const AppNavigator = () => {
             <Stack.Screen
               name="PumpingHistory"
               component={PumpingHistoryScreen}
+              options={{ presentation: 'card' }}
+            />
+            <Stack.Screen
+              name="PumpingFolioDetail"
+              component={PumpingFolioDetailScreen}
               options={{ presentation: 'card' }}
             />
             <Stack.Screen

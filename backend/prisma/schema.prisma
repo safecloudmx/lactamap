@@ -327,15 +327,30 @@ model PumpingSession {
   babyId String?
   baby   Baby?   @relation(fields: [babyId], references: [id])
 
-  side     String // LEFT, RIGHT, BOTH
-  pumpedAt DateTime
-  amountMl Decimal  @default(0)
-  notes    String?
+  folio          String?  @unique
+  side           String // LEFT, RIGHT, BOTH
+  pumpedAt       DateTime
+  amountMl       Decimal  @default(0)
+  storageStatus  String   @default("FROZEN") // FROZEN, REFRIGERATED, CONSUMED
+  expirationDate DateTime?
+  classification String? // DAY, NIGHT
+  notes          String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  photos PumpingPhoto[]
+  photos        PumpingPhoto[]
+  statusHistory PumpingStatusHistory[]
+}
+
+model PumpingStatusHistory {
+  id               String         @id @default(uuid())
+  pumpingSessionId String
+  pumpingSession   PumpingSession @relation(fields: [pumpingSessionId], references: [id], onDelete: Cascade)
+  fromStatus       String?
+  toStatus         String
+  changedAt        DateTime       @default(now())
+  comment          String?
 }
 
 model PumpingPhoto {

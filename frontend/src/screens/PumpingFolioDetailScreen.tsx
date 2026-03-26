@@ -7,13 +7,14 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ArrowLeft, Droplets, Snowflake, Thermometer, CheckCircle,
-  Sun, Moon, Clock, ImageIcon,
+  Sun, Moon, Clock, ImageIcon, FileText, Save,
 } from 'lucide-react-native';
 import { colors, spacing, typography, radii, shadows } from '../theme';
 import { PumpingSession } from '../types';
 import {
   getPumpingSessionByFolio, updatePumpingStatusByFolio,
   getPumpingSessionByPublicToken, updatePumpingStatusByPublicToken,
+  updatePumpingInstructionsByFolio,
 } from '../services/api';
 import ExpirationBadge from '../components/ExpirationBadge';
 import PumpingQRCode from '../components/PumpingQRCode';
@@ -72,6 +73,9 @@ export default function PumpingFolioDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [comment, setComment] = useState('');
+  const [instructionsText, setInstructionsText] = useState('');
+  const [editingInstructions, setEditingInstructions] = useState(false);
+  const [savingInstructions, setSavingInstructions] = useState(false);
 
   const loadSession = useCallback(async () => {
     setLoading(true);
@@ -91,6 +95,11 @@ export default function PumpingFolioDetailScreen() {
   }, [folio, publicToken, isPublicMode]);
 
   useEffect(() => { loadSession(); }, [loadSession]);
+
+  // Sync instructions text when session loads
+  useEffect(() => {
+    if (session) setInstructionsText(session.instructions || '');
+  }, [session]);
 
   const isOwner = !isPublicMode && user && session && user.id === session.userId;
 
@@ -136,6 +145,21 @@ export default function PumpingFolioDetailScreen() {
       Alert.alert('Error', err.response?.data?.error || 'No se pudo actualizar');
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleSaveInstructions = async () => {
+    if (!session?.folio) return;
+    setSavingInstructions(true);
+    try {
+      const updated = await updatePumpingInstructionsByFolio(session.folio, instructionsText.trim() || null);
+      setSession(updated);
+      setEditingInstructions(false);
+      Alert.alert('Guardado', 'Instrucciones actualizadas');
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'No se pudo guardar');
+    } finally {
+      setSavingInstructions(false);
     }
   };
 
@@ -271,6 +295,76 @@ export default function PumpingFolioDetailScreen() {
           )}
         </View>
 
+        {/* Instructions — editable in private mode, read-only in public */}
+        {(isOwner || (isPublicMode && session.instructions)) && (
+          <View style={styles.card}>
+            <View style={styles.infoRow}>
+              <FileText size={18} color={colors.slate[400]} />
+              <Text style={styles.cardTitle}>Instrucciones</Text>
+            </View>
+            {isOwner && !editingInstructions && (
+              <>
+                {session.instructions ? (
+                  <Text style={styles.instructionsText}>{session.instructions}</Text>
+                ) : (
+                  <Text style={styles.instructionsPlaceholder}>
+                    Agrega instrucciones para quien reciba esta leche (ej. temperatura, cantidad por toma, alergias...)
+                  </Text>
+                )}
+                <TouchableOpacity
+                  style={styles.instructionsEditBtn}
+                  onPress={() => setEditingInstructions(true)}
+                >
+                  <Text style={styles.instructionsEditBtnText}>
+                    {session.instructions ? 'Editar instrucciones' : 'Agregar instrucciones'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+            {isOwner && editingInstructions && (
+              <>
+                <TextInput
+                  style={styles.instructionsInput}
+                  placeholder="Escribe las instrucciones aquí..."
+                  placeholderTextColor={colors.slate[300]}
+                  value={instructionsText}
+                  onChangeText={setInstructionsText}
+                  multiline
+                  maxLength={1000}
+                />
+                <View style={styles.instructionsBtnRow}>
+                  <TouchableOpacity
+                    style={styles.instructionsCancelBtn}
+                    onPress={() => {
+                      setInstructionsText(session.instructions || '');
+                      setEditingInstructions(false);
+                    }}
+                  >
+                    <Text style={styles.instructionsCancelBtnText}>Cancelar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.instructionsSaveBtn}
+                    onPress={handleSaveInstructions}
+                    disabled={savingInstructions}
+                  >
+                    {savingInstructions ? (
+                      <ActivityIndicator size="small" color={colors.white} />
+                    ) : (
+                      <>
+                        <Save size={14} color={colors.white} />
+                        <Text style={styles.instructionsSaveBtnText}>Guardar</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+            {isPublicMode && session.instructions && (
+              <Text style={styles.instructionsText}>{session.instructions}</Text>
+            )}
+          </View>
+        )}
+
         {/* Storage status card */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Estado de Consumo</Text>
@@ -354,7 +448,9 @@ export default function PumpingFolioDetailScreen() {
                   </Text>
                   <Text style={styles.historyDate}>{formatDateTime(entry.changedAt)}</Text>
                   {entry.comment && (
-                    <Text style={styles.historyComment}>{entry.comment}</Text>
+                    <View style={styles.historyCommentBubble}>
+                      <Text style={styles.historyComment}>"{entry.comment}"</Text>
+                    </View>
                   )}
                 </View>
               </View>
@@ -550,11 +646,76 @@ const styles = StyleSheet.create({
     color: colors.slate[400],
     marginTop: 2,
   },
+  historyCommentBubble: {
+    backgroundColor: colors.slate[50],
+    borderLeftWidth: 3,
+    borderLeftColor: colors.info,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginTop: spacing.xs,
+  },
   historyComment: {
-    ...typography.caption,
-    color: colors.slate[500],
+    ...typography.small,
+    color: colors.slate[700],
     fontStyle: 'italic',
-    marginTop: 2,
+  },
+  instructionsText: {
+    ...typography.body,
+    color: colors.slate[700],
+    lineHeight: 22,
+  },
+  instructionsPlaceholder: {
+    ...typography.small,
+    color: colors.slate[400],
+    fontStyle: 'italic',
+  },
+  instructionsEditBtn: {
+    marginTop: spacing.md,
+    alignSelf: 'flex-start',
+  },
+  instructionsEditBtnText: {
+    ...typography.smallBold,
+    color: colors.info,
+  },
+  instructionsInput: {
+    ...typography.body,
+    color: colors.slate[700],
+    backgroundColor: colors.slate[50],
+    borderRadius: radii.md,
+    padding: spacing.md,
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  instructionsBtnRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  instructionsCancelBtn: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.slate[200],
+  },
+  instructionsCancelBtnText: {
+    ...typography.smallBold,
+    color: colors.slate[500],
+  },
+  instructionsSaveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.lg,
+    backgroundColor: colors.info,
+  },
+  instructionsSaveBtnText: {
+    ...typography.smallBold,
+    color: colors.white,
   },
   photoThumb: {
     width: 80,

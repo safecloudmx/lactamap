@@ -337,6 +337,7 @@ model PumpingSession {
   classification String? // DAY, NIGHT
   consumedAt     DateTime?
   notes          String?
+  instructions   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -11,6 +11,7 @@ router.get('/', authenticate, pumpingSessionsController.getAll);
 // Folio routes — must be BEFORE /:id to avoid matching "folio"/"public" as an id
 router.get('/folio/:folio', authenticate, pumpingSessionsController.getByFolio);
 router.put('/folio/:folio/status', authenticate, pumpingSessionsController.updateStatusByFolio);
+router.put('/folio/:folio/instructions', authenticate, pumpingSessionsController.updateInstructionsByFolio);
 
 // Public token routes — no auth, limited data
 router.get('/public/:token', pumpingSessionsController.getByPublicToken);

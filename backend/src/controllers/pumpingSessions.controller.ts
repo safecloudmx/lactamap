@@ -105,7 +105,7 @@ export const pumpingSessionsController = {
   create: async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user?.userId;
-      const { side, pumpedAt, amountMl, notes, babyId, storageStatus, expirationDate, classification } = req.body;
+      const { side, pumpedAt, amountMl, notes, babyId, storageStatus, expirationDate, classification, instructions } = req.body;
 
       if (!side || !pumpedAt) {
         return res.status(400).json({ error: 'side and pumpedAt are required' });
@@ -155,6 +155,7 @@ export const pumpingSessionsController = {
           storageStatus: status,
           expirationDate: expDate,
           classification: classification || null,
+          instructions: instructions?.trim() || null,
           statusHistory: {
             create: {
               fromStatus: null,
@@ -180,7 +181,7 @@ export const pumpingSessionsController = {
     try {
       const userId = req.user?.userId;
       const { id } = req.params;
-      const { side, pumpedAt, amountMl, notes, babyId, storageStatus, expirationDate, classification } = req.body;
+      const { side, pumpedAt, amountMl, notes, babyId, storageStatus, expirationDate, classification, instructions } = req.body;
 
       const existing = await prisma.pumpingSession.findUnique({
         where: { id },
@@ -245,6 +246,7 @@ export const pumpingSessionsController = {
         ...(storageStatus && { storageStatus }),
         ...(newExpDate !== undefined && { expirationDate: newExpDate }),
         ...(classification !== undefined && { classification: classification || null }),
+        ...(instructions !== undefined && { instructions: instructions?.trim() || null }),
         ...(newFolio && { folio: newFolio }),
       };
 
@@ -361,6 +363,7 @@ export const pumpingSessionsController = {
         expirationDate: session.expirationDate,
         classification: session.classification,
         consumedAt: session.consumedAt,
+        instructions: session.instructions,
         statusHistory: session.statusHistory,
       });
     } catch (error) {
@@ -430,6 +433,7 @@ export const pumpingSessionsController = {
         expirationDate: updated.expirationDate,
         classification: updated.classification,
         consumedAt: updated.consumedAt,
+        instructions: updated.instructions,
         statusHistory: updated.statusHistory,
       });
     } catch (error) {
@@ -497,6 +501,33 @@ export const pumpingSessionsController = {
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Error updating status' });
+    }
+  },
+
+  // PUT /api/v1/pumping-sessions/folio/:folio/instructions (auth required - owner only)
+  updateInstructionsByFolio: async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user?.userId;
+      const { folio } = req.params;
+      const { instructions } = req.body;
+
+      const session = await prisma.pumpingSession.findUnique({ where: { folio } });
+      if (!session) return res.status(404).json({ error: 'Session not found' });
+      if (session.userId !== userId) return res.status(403).json({ error: 'Forbidden' });
+
+      const updated = await prisma.pumpingSession.update({
+        where: { id: session.id },
+        data: { instructions: instructions?.trim() || null },
+        include: sessionInclude,
+      });
+
+      res.json({
+        ...formatSession(updated),
+        photos: await signPhotos(updated.photos),
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Error updating instructions' });
     }
   },
 

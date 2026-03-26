@@ -186,6 +186,7 @@ export interface PumpingSession {
   classification?: PumpingClassification | null;
   consumedAt?: string | null;
   notes: string | null;
+  instructions?: string | null;
   photos: PumpingPhoto[];
   statusHistory?: PumpingStatusHistoryEntry[];
   createdAt: string;

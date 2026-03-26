@@ -387,6 +387,11 @@ export const updatePumpingStatusByFolio = async (folio: string, data: {
   return response.data;
 };
 
+export const updatePumpingInstructionsByFolio = async (folio: string, instructions: string | null) => {
+  const response = await api.put(`/pumping-sessions/folio/${encodeURIComponent(folio)}/instructions`, { instructions });
+  return response.data;
+};
+
 // Public token endpoints (no auth required)
 export const getPumpingSessionByPublicToken = async (token: string) => {
   const response = await api.get(`/pumping-sessions/public/${encodeURIComponent(token)}`);

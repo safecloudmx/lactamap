@@ -179,7 +179,10 @@ export default function PumpingHistoryScreen() {
       <View style={styles.sessionCard}>
         <TouchableOpacity
           style={styles.sessionCardTop}
-          onPress={() => navigation.navigate('PumpingLog', { session: item })}
+          onPress={() => item.folio
+            ? navigation.navigate('PumpingFolioDetail', { folio: item.folio })
+            : navigation.navigate('PumpingLog', { session: item })
+          }
           activeOpacity={0.7}
         >
           <View style={[styles.sideIcon, { backgroundColor: sideColor + '18' }]}>

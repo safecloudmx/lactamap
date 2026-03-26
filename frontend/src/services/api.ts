@@ -387,6 +387,20 @@ export const updatePumpingStatusByFolio = async (folio: string, data: {
   return response.data;
 };
 
+// Public token endpoints (no auth required)
+export const getPumpingSessionByPublicToken = async (token: string) => {
+  const response = await api.get(`/pumping-sessions/public/${encodeURIComponent(token)}`);
+  return response.data;
+};
+
+export const updatePumpingStatusByPublicToken = async (token: string, data: {
+  storageStatus: string;
+  comment?: string;
+}) => {
+  const response = await api.put(`/pumping-sessions/public/${encodeURIComponent(token)}/status`, data);
+  return response.data;
+};
+
 export const uploadPumpingPhoto = async (sessionId: string, imageUri: string) => {
   const token = await AsyncStorage.getItem('@Auth:token');
   const formData = new FormData();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, TextInput, Image,
@@ -11,7 +11,10 @@ import {
 } from 'lucide-react-native';
 import { colors, spacing, typography, radii, shadows } from '../theme';
 import { PumpingSession } from '../types';
-import { getPumpingSessionByFolio, updatePumpingStatusByFolio } from '../services/api';
+import {
+  getPumpingSessionByFolio, updatePumpingStatusByFolio,
+  getPumpingSessionByPublicToken, updatePumpingStatusByPublicToken,
+} from '../services/api';
 import ExpirationBadge from '../components/ExpirationBadge';
 import PumpingQRCode from '../components/PumpingQRCode';
 import { useAuth } from '../context/AuthContext';
@@ -45,13 +48,25 @@ function formatDateTime(iso: string): string {
   return `${day} ${months[d.getMonth()]} ${d.getFullYear()} - ${h12}:${m.toString().padStart(2, '0')} ${ampm}`;
 }
 
+// Allowed transitions
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  FROZEN: ['REFRIGERATED', 'CONSUMED'],
+  REFRIGERATED: ['CONSUMED'],
+  CONSUMED: [],
+};
+
+const CONSUMED_LOCK_MS = 15 * 60 * 1000;
+
 export default function PumpingFolioDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
 
-  const folio: string = route.params?.folio;
+  // Determine mode: private (folio) or public (token)
+  const folio: string | undefined = route.params?.folio;
+  const publicToken: string | undefined = route.params?.token;
+  const isPublicMode = !!publicToken && !folio;
 
   const [session, setSession] = useState<PumpingSession | null>(null);
   const [loading, setLoading] = useState(true);
@@ -59,33 +74,64 @@ export default function PumpingFolioDetailScreen() {
   const [comment, setComment] = useState('');
 
   const loadSession = useCallback(async () => {
-    if (!folio) return;
     setLoading(true);
     try {
-      const data = await getPumpingSessionByFolio(folio);
-      setSession(data);
+      let data;
+      if (isPublicMode && publicToken) {
+        data = await getPumpingSessionByPublicToken(publicToken);
+      } else if (folio) {
+        data = await getPumpingSessionByFolio(folio);
+      }
+      if (data) setSession(data);
     } catch (err) {
       console.error('Error loading folio:', err);
     } finally {
       setLoading(false);
     }
-  }, [folio]);
+  }, [folio, publicToken, isPublicMode]);
 
   useEffect(() => { loadSession(); }, [loadSession]);
 
-  const isOwner = user && session && user.id === session.userId;
+  const isOwner = !isPublicMode && user && session && user.id === session.userId;
+
+  // In public mode, anyone can change status
+  const canChangeStatus = isPublicMode || isOwner;
+
+  // Check if CONSUMED is locked (15 min)
+  const isConsumedLocked = useMemo(() => {
+    if (!session || session.storageStatus !== 'CONSUMED') return false;
+    if (!session.consumedAt) return false;
+    const elapsed = Date.now() - new Date(session.consumedAt).getTime();
+    return elapsed > CONSUMED_LOCK_MS;
+  }, [session]);
+
+  const availableTransitions = useMemo(() => {
+    if (!session) return [];
+    if (isConsumedLocked) return [];
+    return VALID_TRANSITIONS[session.storageStatus || 'FROZEN'] || [];
+  }, [session, isConsumedLocked]);
 
   const handleStatusChange = async (newStatus: string) => {
-    if (!session?.folio) return;
+    if (!session) return;
     setUpdating(true);
     try {
-      const updated = await updatePumpingStatusByFolio(session.folio, {
-        storageStatus: newStatus,
-        comment: comment.trim() || undefined,
-      });
-      setSession(updated);
-      setComment('');
-      Alert.alert('Actualizado', `Estado cambiado a ${getStorageLabel(newStatus)}`);
+      let updated;
+      if (isPublicMode && publicToken) {
+        updated = await updatePumpingStatusByPublicToken(publicToken, {
+          storageStatus: newStatus,
+          comment: comment.trim() || undefined,
+        });
+      } else if (session.folio) {
+        updated = await updatePumpingStatusByFolio(session.folio, {
+          storageStatus: newStatus,
+          comment: comment.trim() || undefined,
+        });
+      }
+      if (updated) {
+        setSession(updated);
+        setComment('');
+        Alert.alert('Actualizado', `Estado cambiado a ${getStorageLabel(newStatus)}`);
+      }
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.error || 'No se pudo actualizar');
     } finally {
@@ -93,16 +139,26 @@ export default function PumpingFolioDetailScreen() {
     }
   };
 
+  const handleGoBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('PumpingHistory');
+    }
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <ArrowLeft size={24} color={colors.slate[800]} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Detalle de Folio</Text>
-          <View style={{ width: 24 }} />
-        </View>
+        {!isPublicMode && (
+          <View style={styles.header}>
+            <TouchableOpacity onPress={handleGoBack}>
+              <ArrowLeft size={24} color={colors.slate[800]} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Detalle de Folio</Text>
+            <View style={{ width: 24 }} />
+          </View>
+        )}
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.info} />
         </View>
@@ -113,15 +169,17 @@ export default function PumpingFolioDetailScreen() {
   if (!session) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <ArrowLeft size={24} color={colors.slate[800]} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Detalle de Folio</Text>
-          <View style={{ width: 24 }} />
-        </View>
+        {!isPublicMode && (
+          <View style={styles.header}>
+            <TouchableOpacity onPress={handleGoBack}>
+              <ArrowLeft size={24} color={colors.slate[800]} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Detalle de Folio</Text>
+            <View style={{ width: 24 }} />
+          </View>
+        )}
         <View style={styles.loadingContainer}>
-          <Text style={styles.errorText}>No se encontró el registro con folio: {folio}</Text>
+          <Text style={styles.errorText}>No se encontró el registro.</Text>
         </View>
       </View>
     );
@@ -131,20 +189,34 @@ export default function PumpingFolioDetailScreen() {
   const StorageIcon = storage.Icon;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <ArrowLeft size={24} color={colors.slate[800]} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Detalle de Folio</Text>
-        <View style={{ width: 24 }} />
-      </View>
+    <View style={[styles.container, { paddingTop: isPublicMode ? insets.top + spacing.lg : insets.top }]}>
+      {/* Header — hidden in public mode */}
+      {!isPublicMode && (
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleGoBack}>
+            <ArrowLeft size={24} color={colors.slate[800]} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Detalle de Folio</Text>
+          <View style={{ width: 24 }} />
+        </View>
+      )}
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* QR Code */}
-        {session.folio && (
+        {/* QR Codes — hidden in public mode */}
+        {!isPublicMode && session.folio && (
           <View style={styles.qrSection}>
-            <PumpingQRCode folio={session.folio} size={160} />
+            <PumpingQRCode folio={session.folio} publicToken={session.publicToken} size={130} />
+          </View>
+        )}
+
+        {/* Public mode header */}
+        {isPublicMode && (
+          <View style={styles.publicHeader}>
+            <Droplets size={32} color={colors.info} />
+            <Text style={styles.publicTitle}>Registro de Extracción</Text>
+            {session.folio && (
+              <Text style={styles.publicFolio}>{session.folio}</Text>
+            )}
           </View>
         )}
 
@@ -166,7 +238,8 @@ export default function PumpingFolioDetailScreen() {
             <Text style={styles.infoLabel}>Cantidad</Text>
             <Text style={[styles.infoValue, { fontWeight: '700', fontSize: 18 }]}>{session.amountMl} ml</Text>
           </View>
-          {session.baby && (
+          {/* Baby name — only in private mode */}
+          {!isPublicMode && session.baby && (
             <>
               <View style={styles.divider} />
               <View style={styles.infoRow}>
@@ -189,7 +262,8 @@ export default function PumpingFolioDetailScreen() {
               </View>
             </>
           )}
-          {session.notes && (
+          {/* Notes — only in private mode */}
+          {!isPublicMode && session.notes && (
             <>
               <View style={styles.divider} />
               <Text style={styles.notesText}>{session.notes}</Text>
@@ -217,8 +291,8 @@ export default function PumpingFolioDetailScreen() {
             </View>
           )}
 
-          {/* Status change actions (owner only) */}
-          {isOwner && session.storageStatus !== 'CONSUMED' && (
+          {/* Status change actions */}
+          {canChangeStatus && availableTransitions.length > 0 && (
             <>
               <View style={styles.divider} />
               <Text style={styles.changeTitle}>Cambiar estado</Text>
@@ -231,7 +305,7 @@ export default function PumpingFolioDetailScreen() {
                 maxLength={500}
               />
               <View style={styles.changeRow}>
-                {session.storageStatus === 'FROZEN' && (
+                {availableTransitions.includes('REFRIGERATED') && (
                   <TouchableOpacity
                     style={[styles.changeBtn, { backgroundColor: '#06b6d4' }]}
                     onPress={() => handleStatusChange('REFRIGERATED')}
@@ -241,16 +315,27 @@ export default function PumpingFolioDetailScreen() {
                     <Text style={styles.changeBtnText}>Refrigerar</Text>
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity
-                  style={[styles.changeBtn, { backgroundColor: '#22c55e' }]}
-                  onPress={() => handleStatusChange('CONSUMED')}
-                  disabled={updating}
-                >
-                  <CheckCircle size={16} color={colors.white} />
-                  <Text style={styles.changeBtnText}>Consumido</Text>
-                </TouchableOpacity>
+                {availableTransitions.includes('CONSUMED') && (
+                  <TouchableOpacity
+                    style={[styles.changeBtn, { backgroundColor: '#22c55e' }]}
+                    onPress={() => handleStatusChange('CONSUMED')}
+                    disabled={updating}
+                  >
+                    <CheckCircle size={16} color={colors.white} />
+                    <Text style={styles.changeBtnText}>Consumido</Text>
+                  </TouchableOpacity>
+                )}
               </View>
               {updating && <ActivityIndicator size="small" color={colors.info} style={{ marginTop: spacing.sm }} />}
+            </>
+          )}
+
+          {isConsumedLocked && session.storageStatus === 'CONSUMED' && (
+            <>
+              <View style={styles.divider} />
+              <Text style={styles.lockedHint}>
+                El estado de consumo ya no puede modificarse (pasaron 15 min).
+              </Text>
             </>
           )}
         </View>
@@ -259,7 +344,7 @@ export default function PumpingFolioDetailScreen() {
         {session.statusHistory && session.statusHistory.length > 0 && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Historial de Estado</Text>
-            {session.statusHistory.map((entry, idx) => (
+            {session.statusHistory.map((entry) => (
               <View key={entry.id} style={styles.historyEntry}>
                 <View style={styles.historyDot} />
                 <View style={styles.historyContent}>
@@ -277,8 +362,8 @@ export default function PumpingFolioDetailScreen() {
           </View>
         )}
 
-        {/* Photos */}
-        {session.photos && session.photos.length > 0 && (
+        {/* Photos — only in private mode */}
+        {!isPublicMode && session.photos && session.photos.length > 0 && (
           <View style={styles.card}>
             <View style={styles.infoRow}>
               <ImageIcon size={18} color={colors.slate[400]} />
@@ -334,6 +419,20 @@ const styles = StyleSheet.create({
   qrSection: {
     alignItems: 'center',
     paddingVertical: spacing.lg,
+  },
+  publicHeader: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.lg,
+  },
+  publicTitle: {
+    ...typography.h3,
+    color: colors.slate[800],
+  },
+  publicFolio: {
+    ...typography.smallBold,
+    color: colors.slate[400],
+    fontFamily: 'monospace',
   },
   card: {
     backgroundColor: colors.white,
@@ -421,6 +520,11 @@ const styles = StyleSheet.create({
   changeBtnText: {
     ...typography.smallBold,
     color: colors.white,
+  },
+  lockedHint: {
+    ...typography.caption,
+    color: colors.slate[400],
+    fontStyle: 'italic',
   },
   historyEntry: {
     flexDirection: 'row',

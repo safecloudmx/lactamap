@@ -11,6 +11,7 @@ const linking: LinkingOptions<any> = {
   prefixes: [],
   config: {
     screens: {
+      PublicFolioDetail: 'folio-publico',
       Login: 'login',
       Main: {
         path: '',
@@ -154,6 +155,12 @@ export const AppNavigator = () => {
   return (
     <NavigationContainer linking={Platform.OS === 'web' ? linking : undefined}>
       <Stack.Navigator screenOptions={{ headerShown: false, cardStyle: { flex: 1 } }}>
+        {/* Public route — accessible without auth */}
+        <Stack.Screen
+          name="PublicFolioDetail"
+          component={PumpingFolioDetailScreen}
+          options={{ presentation: 'card' }}
+        />
         {!user ? (
           <Stack.Screen name="Login" component={LoginScreen} />
         ) : (

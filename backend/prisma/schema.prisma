@@ -327,13 +327,15 @@ model PumpingSession {
   babyId String?
   baby   Baby?   @relation(fields: [babyId], references: [id])
 
-  folio          String?  @unique
+  folio          String?   @unique
+  publicToken    String    @unique @default(uuid())
   side           String // LEFT, RIGHT, BOTH
   pumpedAt       DateTime
-  amountMl       Decimal  @default(0)
-  storageStatus  String   @default("FROZEN") // FROZEN, REFRIGERATED, CONSUMED
+  amountMl       Decimal   @default(0)
+  storageStatus  String    @default("FROZEN") // FROZEN, REFRIGERATED, CONSUMED
   expirationDate DateTime?
   classification String? // DAY, NIGHT
+  consumedAt     DateTime?
   notes          String?
 
   createdAt DateTime @default(now())

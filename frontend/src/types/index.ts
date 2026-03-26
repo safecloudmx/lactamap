@@ -177,12 +177,14 @@ export interface PumpingSession {
   babyId?: string | null;
   baby?: { id: string; name: string } | null;
   folio?: string | null;
+  publicToken?: string;
   side: PumpingSide;
   pumpedAt: string;
   amountMl: number;
   storageStatus?: StorageStatus;
   expirationDate?: string | null;
   classification?: PumpingClassification | null;
+  consumedAt?: string | null;
   notes: string | null;
   photos: PumpingPhoto[];
   statusHistory?: PumpingStatusHistoryEntry[];

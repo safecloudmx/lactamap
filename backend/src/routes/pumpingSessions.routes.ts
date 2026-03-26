@@ -8,9 +8,13 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 
 router.get('/', authenticate, pumpingSessionsController.getAll);
 
-// Folio routes — must be BEFORE /:id to avoid matching "folio" as an id
-router.get('/folio/:folio', pumpingSessionsController.getByFolio);
+// Folio routes — must be BEFORE /:id to avoid matching "folio"/"public" as an id
+router.get('/folio/:folio', authenticate, pumpingSessionsController.getByFolio);
 router.put('/folio/:folio/status', authenticate, pumpingSessionsController.updateStatusByFolio);
+
+// Public token routes — no auth, limited data
+router.get('/public/:token', pumpingSessionsController.getByPublicToken);
+router.put('/public/:token/status', pumpingSessionsController.updateStatusByPublicToken);
 
 router.get('/:id', authenticate, pumpingSessionsController.getOne);
 router.post('/', authenticate, pumpingSessionsController.create);

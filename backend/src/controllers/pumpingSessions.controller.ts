@@ -10,6 +10,15 @@ const VALID_SIDES = ['LEFT', 'RIGHT', 'BOTH'];
 const VALID_STORAGE = ['FROZEN', 'REFRIGERATED', 'CONSUMED'];
 const VALID_CLASSIFICATION = ['DAY', 'NIGHT'];
 
+// Allowed status transitions
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  FROZEN: ['REFRIGERATED', 'CONSUMED'],
+  REFRIGERATED: ['CONSUMED'],
+  CONSUMED: [],
+};
+
+const CONSUMED_LOCK_MS = 15 * 60 * 1000; // 15 minutes
+
 const sessionInclude = {
   photos: true,
   baby: { select: { id: true, name: true } },
@@ -303,31 +312,129 @@ export const pumpingSessionsController = {
     }
   },
 
-  // GET /api/v1/pumping-sessions/folio/:folio (public - no auth required)
+  // GET /api/v1/pumping-sessions/folio/:folio (auth required - owner only)
   getByFolio: async (req: AuthRequest, res: Response) => {
     try {
+      const userId = req.user?.userId;
       const { folio } = req.params;
 
       const session = await prisma.pumpingSession.findUnique({
         where: { folio },
+        include: sessionInclude,
+      });
+
+      if (!session) return res.status(404).json({ error: 'Session not found' });
+      if (session.userId !== userId) return res.status(403).json({ error: 'Forbidden' });
+
+      res.json({
+        ...formatSession(session),
+        photos: await signPhotos(session.photos),
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Error fetching session by folio' });
+    }
+  },
+
+  // GET /api/v1/pumping-sessions/public/:token (no auth - limited data)
+  getByPublicToken: async (req: AuthRequest, res: Response) => {
+    try {
+      const { token } = req.params;
+
+      const session = await prisma.pumpingSession.findUnique({
+        where: { publicToken: token },
         include: {
-          photos: true,
-          baby: { select: { id: true, name: true } },
           statusHistory: { orderBy: { changedAt: 'desc' as const } },
         },
       });
 
       if (!session) return res.status(404).json({ error: 'Session not found' });
 
-      // Return public-safe data (no userId)
-      const { userId, ...publicData } = formatSession(session);
+      // Return limited public data: no baby name, no photos, no notes, no userId
       res.json({
-        ...publicData,
-        photos: await signPhotos(session.photos),
+        id: session.id,
+        folio: session.folio,
+        side: session.side,
+        pumpedAt: session.pumpedAt,
+        amountMl: Number(session.amountMl),
+        storageStatus: session.storageStatus,
+        expirationDate: session.expirationDate,
+        classification: session.classification,
+        consumedAt: session.consumedAt,
+        statusHistory: session.statusHistory,
       });
     } catch (error) {
       console.error(error);
-      res.status(500).json({ error: 'Error fetching session by folio' });
+      res.status(500).json({ error: 'Error fetching session' });
+    }
+  },
+
+  // PUT /api/v1/pumping-sessions/public/:token/status (no auth - public status change)
+  updateStatusByPublicToken: async (req: AuthRequest, res: Response) => {
+    try {
+      const { token } = req.params;
+      const { storageStatus, comment } = req.body;
+
+      if (!storageStatus || !VALID_STORAGE.includes(storageStatus)) {
+        return res.status(400).json({ error: 'storageStatus must be FROZEN, REFRIGERATED, or CONSUMED' });
+      }
+
+      const session = await prisma.pumpingSession.findUnique({ where: { publicToken: token } });
+      if (!session) return res.status(404).json({ error: 'Session not found' });
+
+      // Validate transition
+      const allowed = VALID_TRANSITIONS[session.storageStatus] || [];
+      if (!allowed.includes(storageStatus)) {
+        return res.status(400).json({ error: `No se puede cambiar de ${session.storageStatus} a ${storageStatus}` });
+      }
+
+      // Check 15-min lock on CONSUMED
+      if (session.storageStatus === 'CONSUMED' && session.consumedAt) {
+        const elapsed = Date.now() - new Date(session.consumedAt).getTime();
+        if (elapsed > CONSUMED_LOCK_MS) {
+          return res.status(400).json({ error: 'El estado de consumo ya no puede modificarse (pasaron 15 min)' });
+        }
+      }
+
+      const newExp = calculateExpiration(storageStatus, new Date());
+      const isConsumed = storageStatus === 'CONSUMED';
+
+      const [, updated] = await prisma.$transaction([
+        prisma.pumpingStatusHistory.create({
+          data: {
+            pumpingSessionId: session.id,
+            fromStatus: session.storageStatus,
+            toStatus: storageStatus,
+            comment: comment?.trim() || null,
+          },
+        }),
+        prisma.pumpingSession.update({
+          where: { id: session.id },
+          data: {
+            storageStatus,
+            expirationDate: newExp,
+            ...(isConsumed && { consumedAt: new Date() }),
+          },
+          include: { statusHistory: { orderBy: { changedAt: 'desc' as const } } },
+        }),
+      ]);
+
+      // Return limited data
+      res.json({
+        id: updated.id,
+        folio: updated.folio,
+        side: updated.side,
+        pumpedAt: updated.pumpedAt,
+        amountMl: Number(updated.amountMl),
+        storageStatus: updated.storageStatus,
+        expirationDate: updated.expirationDate,
+        classification: updated.classification,
+        consumedAt: updated.consumedAt,
+        statusHistory: updated.statusHistory,
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Error updating status' });
     }
   },
 
@@ -346,12 +453,22 @@ export const pumpingSessionsController = {
       if (!session) return res.status(404).json({ error: 'Session not found' });
       if (session.userId !== userId) return res.status(403).json({ error: 'Forbidden' });
 
-      if (session.storageStatus === storageStatus) {
-        return res.status(400).json({ error: 'Status is already ' + storageStatus });
+      // Validate transition
+      const allowed = VALID_TRANSITIONS[session.storageStatus] || [];
+      if (!allowed.includes(storageStatus)) {
+        return res.status(400).json({ error: `No se puede cambiar de ${session.storageStatus} a ${storageStatus}` });
       }
 
-      // Recalculate expiration from now
+      // Check 15-min lock on CONSUMED
+      if (session.storageStatus === 'CONSUMED' && session.consumedAt) {
+        const elapsed = Date.now() - new Date(session.consumedAt).getTime();
+        if (elapsed > CONSUMED_LOCK_MS) {
+          return res.status(400).json({ error: 'El estado de consumo ya no puede modificarse (pasaron 15 min)' });
+        }
+      }
+
       const newExp = calculateExpiration(storageStatus, new Date());
+      const isConsumed = storageStatus === 'CONSUMED';
 
       const [, updated] = await prisma.$transaction([
         prisma.pumpingStatusHistory.create({
@@ -367,6 +484,7 @@ export const pumpingSessionsController = {
           data: {
             storageStatus,
             expirationDate: newExp,
+            ...(isConsumed && { consumedAt: new Date() }),
           },
           include: sessionInclude,
         }),

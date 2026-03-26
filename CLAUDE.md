@@ -25,10 +25,10 @@ Backend: Express + Prisma + PostgreSQL + S3 (Sharp→WebP). Frontend: React Nati
 auth, lactarios, reviews, users, babies, nursing-sessions, pumping-sessions, sleep-sessions, diaper-records, growth-records, submissions, edit-proposals, photos (ver archivos en `backend/src/routes/`)
 
 ## Modelos Prisma
-User, Lactario, LactarioAmenity, Review, ReviewReport, Baby, NursingSession, PumpingSession, PumpingPhoto, SleepSession, DiaperRecord, GrowthRecord, GrowthPhoto, Photo, Badge, UserBadge, LactarioSubmission, LactarioEditProposal, MaintenanceReport, ModerationQueue
+User, Lactario, LactarioAmenity, Review, ReviewReport, Baby, NursingSession, PumpingSession, PumpingPhoto, PumpingStatusHistory, SleepSession, DiaperRecord, GrowthRecord, GrowthPhoto, Photo, Badge, UserBadge, LactarioSubmission, LactarioEditProposal, MaintenanceReport, ModerationQueue
 
 ## Pantallas Frontend
-Login, Dashboard, HomeScreen(mapa), Explore, Profile, RoomDetail, AddRoom, EditRoom, NursingTimer, PumpingLog, PumpingHistory, FeedingHistory, FeedingSessionDetail, EditProfile, MyContributions, AdminReview, Leaderboard, Resources, Settings, About, BabyDetail, BabyEdit, GrowthAdd, SleepTimer, SleepHistory, SleepSessionDetail, DiaperLog, DiaperHistory, DiaperRecordDetail, RelaxingSounds, AddFloor
+Login, Dashboard, HomeScreen(mapa), Explore, Profile, RoomDetail, AddRoom, EditRoom, NursingTimer, PumpingLog, PumpingHistory, PumpingFolioDetail, FeedingHistory, FeedingSessionDetail, EditProfile, MyContributions, AdminReview, Leaderboard, Resources, Settings, About, BabyDetail, BabyEdit, GrowthAdd, SleepTimer, SleepHistory, SleepSessionDetail, DiaperLog, DiaperHistory, DiaperRecordDetail, RelaxingSounds, AddFloor
 
 ## Patrones clave
 - Imágenes: ImagePicker → Sharp resize → WebP → S3 → signUrl() (6h TTL, 1h cache)
@@ -39,3 +39,9 @@ Login, Dashboard, HomeScreen(mapa), Explore, Profile, RoomDetail, AddRoom, EditR
 - Baby tracking: BabyDetailScreen hub → growth records, nursing, pumping, sleep, diaper filtered by babyId
 - Sleep/Diaper: hybrid storage (server API + local AsyncStorage fallback via hasToken() check)
 - Baby avatars: same S3 pipeline (Sharp 400x400 cover → WebP → S3)
+- Pumping folio: auto-generated codes (LD-ID260326-1429), dual QR (private folio auth-only + public token no-auth limited data)
+- Pumping status transitions: FROZEN→REFRIGERATED→CONSUMED only. CONSUMED locked after 15 min.
+- Pumping fields lock: side/date/time/baby/amount locked after 15 min from createdAt
+- Public routes: `/folio-publico?token=UUID` accessible without auth (PublicFolioDetail screen reuses PumpingFolioDetailScreen with public mode)
+- Expiration: 4-4-4 rule (4 months frozen, 4 days refrigerated). Frontend: `ExpirationBadge` component, `utils/expiration.ts`
+- QR codes: `react-native-qrcode-svg`, web download renders QR+folio text via canvas

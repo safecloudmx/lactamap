@@ -15,6 +15,7 @@ import { PumpingSession, Baby } from '../types';
 import { getPumpingSessions, deletePumpingSession } from '../services/api';
 import { EmptyState } from '../components/ui';
 import ExpirationBadge from '../components/ExpirationBadge';
+import BabySelector from '../components/BabySelector';
 import * as nursingStorage from '../services/nursingStorage';
 
 type Section = { title: string; totalMl: number; data: PumpingSession[] };
@@ -279,7 +280,7 @@ export default function PumpingHistoryScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => navigation.goBack()}
+          onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Resources')}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <ArrowLeft size={24} color={colors.slate[800]} />
@@ -294,32 +295,12 @@ export default function PumpingHistoryScreen() {
       </View>
 
       {/* Baby Filter */}
-      {babies.length > 0 && (
-        <View style={styles.filterRow}>
-          <TouchableOpacity
-            style={[styles.filterChip, !filterBabyId && styles.filterChipSelected]}
-            onPress={() => setFilterBabyId(null)}
-          >
-            <Text style={[styles.filterChipText, !filterBabyId && styles.filterChipTextSelected]}>
-              Todos
-            </Text>
-          </TouchableOpacity>
-          {babies.map((baby) => (
-            <TouchableOpacity
-              key={baby.id}
-              style={[styles.filterChip, filterBabyId === baby.id && styles.filterChipSelected]}
-              onPress={() => setFilterBabyId(filterBabyId === baby.id ? null : baby.id)}
-            >
-              <Text style={[
-                styles.filterChipText,
-                filterBabyId === baby.id && styles.filterChipTextSelected,
-              ]}>
-                {baby.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
+      <View style={styles.filterRow}>
+        <BabySelector
+          selectedBabyId={filterBabyId}
+          onSelectBaby={setFilterBabyId}
+        />
+      </View>
 
       {/* Date Filter */}
       <View style={styles.dateFilterRow}>
@@ -456,15 +437,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.slate[100],
   },
-  filterChip: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.full,
-    backgroundColor: colors.slate[100],
-  },
-  filterChipSelected: {
-    backgroundColor: colors.info,
-  },
   dateFilterRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -518,13 +490,6 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.slate[500],
     fontSize: 10,
-  },
-  filterChipText: {
-    ...typography.smallBold,
-    color: colors.slate[600],
-  },
-  filterChipTextSelected: {
-    color: colors.white,
   },
   summaryBar: {
     flexDirection: 'row',

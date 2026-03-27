@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, SectionList,
+  View, Text, TouchableOpacity, StyleSheet,
   ActivityIndicator,
 } from 'react-native';
+import RefreshableSectionList from '../components/ui/RefreshableSectionList';
 import { confirmAlert } from '../services/crossPlatformAlert';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -386,7 +387,8 @@ export default function PumpingHistoryScreen() {
           onAction={() => navigation.navigate('PumpingLog')}
         />
       ) : (
-        <SectionList
+        <RefreshableSectionList
+          onRefresh={loadData}
           sections={sections}
           keyExtractor={(item) => item.id}
           renderItem={renderSession}

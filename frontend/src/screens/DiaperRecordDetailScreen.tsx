@@ -3,6 +3,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput,
   KeyboardAvoidingView, Platform, Modal, Image,
 } from 'react-native';
+import RefreshableScroll from '../components/ui/RefreshableScroll';
 import { confirmAlert, infoAlert } from '../services/crossPlatformAlert';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -77,24 +78,24 @@ export default function DiaperRecordDetailScreen() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  const loadData = useCallback(async () => {
+    const [allRecords, babiesData] = await Promise.all([
+      diaperStorage.getRecords(),
+      diaperStorage.getBabies(),
+    ]);
+    setBabies(babiesData);
+    const found = allRecords.find((r) => r.id === recordId);
+    if (found) {
+      setRecord(found);
+      setSelectedBabyId(found.babyId || null);
+      setDiaperType(found.type);
+      setNotes(found.notes);
+      setPhotos(found.photos.map((uri) => ({ uri })));
+    }
+  }, [recordId]);
+
   useFocusEffect(
-    useCallback(() => {
-      (async () => {
-        const [allRecords, babiesData] = await Promise.all([
-          diaperStorage.getRecords(),
-          diaperStorage.getBabies(),
-        ]);
-        setBabies(babiesData);
-        const found = allRecords.find((r) => r.id === recordId);
-        if (found) {
-          setRecord(found);
-          setSelectedBabyId(found.babyId || null);
-          setDiaperType(found.type);
-          setNotes(found.notes);
-          setPhotos(found.photos.map((uri) => ({ uri })));
-        }
-      })();
-    }, [recordId])
+    useCallback(() => { loadData(); }, [loadData])
   );
 
   const handleSave = async () => {
@@ -223,7 +224,8 @@ export default function DiaperRecordDetailScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView
+        <RefreshableScroll
+          onRefresh={loadData}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
@@ -396,7 +398,7 @@ export default function DiaperRecordDetailScreen() {
               <Text style={styles.saveBtnText}>Guardar cambios</Text>
             </TouchableOpacity>
           )}
-        </ScrollView>
+        </RefreshableScroll>
       </KeyboardAvoidingView>
 
       {/* Edit Time Modal */}

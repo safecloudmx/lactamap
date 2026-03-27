@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput,
+  View, Text, TouchableOpacity, StyleSheet, TextInput,
   KeyboardAvoidingView, Platform, Modal,
 } from 'react-native';
+import RefreshableScroll from '../components/ui/RefreshableScroll';
 import { confirmAlert, infoAlert } from '../services/crossPlatformAlert';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -333,7 +334,8 @@ export default function FeedingSessionDetailScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView
+        <RefreshableScroll
+          onRefresh={loadSession}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -443,7 +445,7 @@ export default function FeedingSessionDetailScreen() {
               </Text>
             </TouchableOpacity>
           )}
-        </ScrollView>
+        </RefreshableScroll>
 
         {/* Edit Duration Modal */}
         <Modal

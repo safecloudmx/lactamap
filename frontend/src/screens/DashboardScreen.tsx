@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, TouchableOpacity, StyleSheet,
   Linking, Platform,
 } from 'react-native';
+import RefreshableScroll from '../components/ui/RefreshableScroll';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, DrawerActions } from '@react-navigation/native';
 import {
@@ -49,46 +50,46 @@ export default function DashboardScreen() {
   const fullName = user?.name || user?.email?.split('@')[0] || 'Visitante';
   const firstName = fullName.split(' ')[0];
 
+  const loadData = useCallback(async () => {
+    try {
+      // Get user location
+      let userLat = 25.6866, userLng = -100.3161; // Default Monterrey
+      if (Location) {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          userLat = loc.coords.latitude;
+          userLng = loc.coords.longitude;
+        }
+      }
+
+      // Get all places and filter by distance (5km, expand to 10km if needed)
+      const data = await getLactarios();
+      const withDistance = data.map((place: Lactario) => ({
+        ...place,
+        distance: getDistance(userLat, userLng, place.latitude || 0, place.longitude || 0),
+      }));
+
+      // Try 5km first, expand to 10km if no results
+      let nearby = withDistance
+        .filter((place: PlaceWithDistance) => place.distance <= 5)
+        .sort((a: PlaceWithDistance, b: PlaceWithDistance) => a.distance - b.distance)
+        .slice(0, 3);
+
+      if (nearby.length === 0) {
+        nearby = withDistance
+          .filter((place: PlaceWithDistance) => place.distance <= 10)
+          .sort((a: PlaceWithDistance, b: PlaceWithDistance) => a.distance - b.distance)
+          .slice(0, 3);
+      }
+
+      setNearbyCount(nearby.length);
+      setNearbyPlaces(nearby);
+    } catch (_) {}
+  }, []);
+
   useFocusEffect(
-    useCallback(() => {
-      (async () => {
-        try {
-          // Get user location
-          let userLat = 25.6866, userLng = -100.3161; // Default Monterrey
-          if (Location) {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status === 'granted') {
-              const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-              userLat = loc.coords.latitude;
-              userLng = loc.coords.longitude;
-            }
-          }
-
-          // Get all places and filter by distance (5km, expand to 10km if needed)
-          const data = await getLactarios();
-          const withDistance = data.map((place: Lactario) => ({
-            ...place,
-            distance: getDistance(userLat, userLng, place.latitude || 0, place.longitude || 0),
-          }));
-
-          // Try 5km first, expand to 10km if no results
-          let nearby = withDistance
-            .filter((place: PlaceWithDistance) => place.distance <= 5)
-            .sort((a: PlaceWithDistance, b: PlaceWithDistance) => a.distance - b.distance)
-            .slice(0, 3);
-
-          if (nearby.length === 0) {
-            nearby = withDistance
-              .filter((place: PlaceWithDistance) => place.distance <= 10)
-              .sort((a: PlaceWithDistance, b: PlaceWithDistance) => a.distance - b.distance)
-              .slice(0, 3);
-          }
-
-          setNearbyCount(nearby.length);
-          setNearbyPlaces(nearby);
-        } catch (_) {}
-      })();
-    }, [])
+    useCallback(() => { loadData(); }, [loadData])
   );
 
   const tools = [
@@ -167,7 +168,8 @@ export default function DashboardScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView
+      <RefreshableScroll
+        onRefresh={loadData}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -255,7 +257,7 @@ export default function DashboardScreen() {
         </View>
 
         <View style={{ height: spacing.xxxl }} />
-      </ScrollView>
+      </RefreshableScroll>
     </View>
   );
 }

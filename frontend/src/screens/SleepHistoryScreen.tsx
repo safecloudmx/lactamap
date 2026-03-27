@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, SectionList,
+  View, Text, TouchableOpacity, StyleSheet,
 } from 'react-native';
+import RefreshableSectionList from '../components/ui/RefreshableSectionList';
 import { confirmAlert } from '../services/crossPlatformAlert';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -70,13 +71,16 @@ export default function SleepHistoryScreen() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [sessionsData, babiesData] = await Promise.all([
-      sleepStorage.getSessions(),
-      sleepStorage.getBabies(),
-    ]);
-    setSessions(sessionsData);
-    setBabies(babiesData);
-    setLoading(false);
+    try {
+      const [sessionsData, babiesData] = await Promise.all([
+        sleepStorage.getSessions(),
+        sleepStorage.getBabies(),
+      ]);
+      setSessions(sessionsData);
+      setBabies(babiesData);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useFocusEffect(
@@ -258,7 +262,8 @@ export default function SleepHistoryScreen() {
           />
         </View>
       ) : (
-        <SectionList
+        <RefreshableSectionList
+          onRefresh={loadData}
           sections={sections}
           keyExtractor={(item) => item.id}
           renderItem={renderSession}

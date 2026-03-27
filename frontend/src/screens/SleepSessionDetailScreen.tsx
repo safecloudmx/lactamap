@@ -3,6 +3,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput,
   KeyboardAvoidingView, Platform, Modal, Image,
 } from 'react-native';
+import RefreshableScroll from '../components/ui/RefreshableScroll';
 import { confirmAlert, infoAlert } from '../services/crossPlatformAlert';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -318,7 +319,8 @@ export default function SleepSessionDetailScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView
+        <RefreshableScroll
+          onRefresh={loadSession}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -485,7 +487,7 @@ export default function SleepSessionDetailScreen() {
               </Text>
             </TouchableOpacity>
           )}
-        </ScrollView>
+        </RefreshableScroll>
 
         {/* Edit Duration Modal */}
         <Modal

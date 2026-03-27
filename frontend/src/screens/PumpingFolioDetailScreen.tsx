@@ -3,6 +3,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, TextInput, Image,
 } from 'react-native';
+import RefreshableScroll from '../components/ui/RefreshableScroll';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -225,7 +226,7 @@ export default function PumpingFolioDetailScreen() {
         </View>
       )}
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <RefreshableScroll onRefresh={loadSession} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* QR Codes — hidden in public mode */}
         {!isPublicMode && session.folio && (
           <View style={styles.qrSection}>
@@ -472,7 +473,7 @@ export default function PumpingFolioDetailScreen() {
             </ScrollView>
           </View>
         )}
-      </ScrollView>
+      </RefreshableScroll>
     </View>
   );
 }

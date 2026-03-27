@@ -3,6 +3,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Image, ActivityIndicator, Platform, Modal, Dimensions,
 } from 'react-native';
+import RefreshableScroll from '../components/ui/RefreshableScroll';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import {
@@ -165,7 +166,7 @@ export default function BabyDetailScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <RefreshableScroll onRefresh={loadData} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} nestedScrollEnabled>
         {/* Avatar & Info */}
         <View style={styles.profileCard}>
           <TouchableOpacity onPress={handlePickAvatar} style={styles.avatarContainer} activeOpacity={0.7}>
@@ -338,7 +339,7 @@ export default function BabyDetailScreen() {
             </TouchableOpacity>
           ))}
         </View>
-      </ScrollView>
+      </RefreshableScroll>
 
       {/* Fullscreen Image Viewer */}
       <Modal visible={!!fullscreenImage} transparent animationType="fade">

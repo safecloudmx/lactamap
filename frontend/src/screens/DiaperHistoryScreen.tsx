@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, SectionList,
+  View, Text, TouchableOpacity, StyleSheet,
 } from 'react-native';
+import RefreshableSectionList from '../components/ui/RefreshableSectionList';
 import { confirmAlert } from '../services/crossPlatformAlert';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -75,13 +76,16 @@ export default function DiaperHistoryScreen() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [recordsData, babiesData] = await Promise.all([
-      diaperStorage.getRecords(),
-      diaperStorage.getBabies(),
-    ]);
-    setRecords(recordsData);
-    setBabies(babiesData);
-    setLoading(false);
+    try {
+      const [recordsData, babiesData] = await Promise.all([
+        diaperStorage.getRecords(),
+        diaperStorage.getBabies(),
+      ]);
+      setRecords(recordsData);
+      setBabies(babiesData);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useFocusEffect(
@@ -256,7 +260,8 @@ export default function DiaperHistoryScreen() {
           />
         </View>
       ) : (
-        <SectionList
+        <RefreshableSectionList
+          onRefresh={loadData}
           sections={sections}
           keyExtractor={(item) => item.id}
           renderItem={renderRecord}

@@ -16,6 +16,7 @@ import {
   StatusBar,
   Linking,
 } from 'react-native';
+import RefreshableScroll from '../components/ui/RefreshableScroll';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
@@ -303,7 +304,7 @@ export default function RoomDetailScreen() {
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView style={styles.container} contentContainerStyle={{flexGrow: 1}} bounces={false} scrollEnabled={true} nestedScrollEnabled={true} showsVerticalScrollIndicator={false}>
+      <RefreshableScroll onRefresh={fetchDetails} style={styles.container} contentContainerStyle={{flexGrow: 1}} bounces={false} scrollEnabled={true} nestedScrollEnabled={true} showsVerticalScrollIndicator={false}>
         {/* Photo Carousel */}
         <View style={styles.heroContainer}>
           <ScrollView
@@ -928,7 +929,7 @@ export default function RoomDetailScreen() {
             })}
           </View>
         </View>
-      </ScrollView>
+      </RefreshableScroll>
     </KeyboardAvoidingView>
   );
 }

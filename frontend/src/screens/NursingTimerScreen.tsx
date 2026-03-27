@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView,
+  View, Text, TouchableOpacity, StyleSheet,
 } from 'react-native';
+import RefreshableScroll from '../components/ui/RefreshableScroll';
 import { confirmAlert, infoAlert } from '../services/crossPlatformAlert';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -37,8 +38,10 @@ export default function NursingTimerScreen() {
 
   // Load today's sessions on focus
   const loadTodaySessions = useCallback(async () => {
-    const sessions = await nursingStorage.getTodaySessions();
-    setTodaySessions(sessions);
+    try {
+      const sessions = await nursingStorage.getTodaySessions();
+      setTodaySessions(sessions);
+    } catch (_) {}
   }, []);
 
   useFocusEffect(
@@ -94,7 +97,8 @@ export default function NursingTimerScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView
+      <RefreshableScroll
+        onRefresh={loadTodaySessions}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -277,7 +281,7 @@ export default function NursingTimerScreen() {
           <Clock size={18} color={colors.primary[500]} />
           <Text style={styles.historyLinkText}>Ver historial completo</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </RefreshableScroll>
     </View>
   );
 }

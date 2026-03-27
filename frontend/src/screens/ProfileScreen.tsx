@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity,
   TextInput, Image,
 } from 'react-native';
+import RefreshableScroll from '../components/ui/RefreshableScroll';
 import { confirmAlert, infoAlert } from '../services/crossPlatformAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, DrawerActions } from '@react-navigation/native';
@@ -33,26 +34,19 @@ export default function ProfileScreen() {
   const [editingBaby, setEditingBaby] = useState<Baby | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (user?.isGuest) return;
-      (async () => {
-        try {
-          const data = await getUserProfile();
-          setProfileData(data);
-        } catch (_) {}
-      })();
-    }, [user])
-  );
+  const loadData = useCallback(async () => {
+    if (!user?.isGuest) {
+      try {
+        const data = await getUserProfile();
+        setProfileData(data);
+      } catch (_) {}
+    }
+    const list = await nursingStorage.getBabies();
+    setBabies(list);
+  }, [user]);
 
-  // Load babies on focus
   useFocusEffect(
-    useCallback(() => {
-      (async () => {
-        const list = await nursingStorage.getBabies();
-        setBabies(list);
-      })();
-    }, [])
+    useCallback(() => { loadData(); }, [loadData])
   );
 
   const displayUser = profileData || user;
@@ -151,7 +145,8 @@ export default function ProfileScreen() {
   const isEditingBaby = editingBaby !== null;
 
   return (
-    <ScrollView
+    <RefreshableScroll
+      onRefresh={loadData}
       style={styles.container}
       contentContainerStyle={{ paddingBottom: 100 }}
       showsVerticalScrollIndicator={false}
@@ -338,7 +333,7 @@ export default function ProfileScreen() {
         title="Inicia sesión para registrar a tu bebé"
         message="Crea una cuenta para guardar el perfil de tu bebé y sincronizar tus sesiones de lactancia de forma segura."
       />
-    </ScrollView>
+    </RefreshableScroll>
   );
 }
 

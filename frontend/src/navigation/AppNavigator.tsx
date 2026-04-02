@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useCallback } from 'react';
 import { View, ActivityIndicator, Platform } from 'react-native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -6,6 +6,55 @@ import { createDrawerNavigator } from '@react-navigation/drawer';
 import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme';
+
+const SCREEN_TITLES: Record<string, string> = {
+  Login: 'Iniciar Sesión',
+  Inicio: 'Inicio',
+  Mapa: 'Mapa',
+  Explorar: 'Explorar',
+  Recursos: 'Recursos',
+  Perfil: 'Mi Perfil',
+  MyContributions: 'Mis Aportes',
+  Leaderboard: 'Tabla de Líderes',
+  Settings: 'Ajustes',
+  About: 'Acerca de',
+  RoomDetail: 'Detalle del Lugar',
+  AddRoomModal: 'Agregar Lugar',
+  EditRoom: 'Editar Lugar',
+  AddFloor: 'Agregar Espacio',
+  EditProfile: 'Editar Perfil',
+  NursingTimer: 'Cronómetro de Lactancia',
+  FeedingHistory: 'Historial de Alimentación',
+  FeedingSessionDetail: 'Detalle de Sesión',
+  PumpingLog: 'Registro de Extracción',
+  PumpingHistory: 'Historial de Extracción',
+  PumpingFolioDetail: 'Detalle del Folio',
+  SleepTimer: 'Cronómetro de Sueño',
+  SleepHistory: 'Historial de Sueño',
+  SleepSessionDetail: 'Detalle de Sueño',
+  DiaperLog: 'Registro de Pañales',
+  DiaperHistory: 'Historial de Pañales',
+  DiaperRecordDetail: 'Detalle del Pañal',
+  RelaxingSounds: 'Sonidos Relajantes',
+  BabyDetail: 'Detalle del Bebé',
+  BabyEdit: 'Editar Bebé',
+  GrowthAdd: 'Registrar Crecimiento',
+  AdminReview: 'Revisión Admin',
+  PublicFolioDetail: 'Folio Público',
+};
+
+function getScreenTitle(routeName: string | undefined): string {
+  if (!routeName) return 'LactaMap';
+  const label = SCREEN_TITLES[routeName];
+  return label ? `${label} | LactaMap` : 'LactaMap';
+}
+
+function getActiveRouteName(state: any): string | undefined {
+  if (!state) return undefined;
+  const route = state.routes[state.index];
+  if (route?.state) return getActiveRouteName(route.state);
+  return route?.name;
+}
 
 const linking: LinkingOptions<any> = {
   prefixes: [],
@@ -143,6 +192,12 @@ function DrawerNavigator() {
 
 export const AppNavigator = () => {
   const { user, loading } = useAuth();
+  const navigationRef = useRef<any>(null);
+
+  const updateTitle = useCallback((state: any) => {
+    if (Platform.OS !== 'web') return;
+    document.title = getScreenTitle(getActiveRouteName(state));
+  }, []);
 
   if (loading) {
     return (
@@ -153,7 +208,13 @@ export const AppNavigator = () => {
   }
 
   return (
-    <NavigationContainer linking={Platform.OS === 'web' ? linking : undefined}>
+    <NavigationContainer
+      ref={navigationRef}
+      linking={Platform.OS === 'web' ? linking : undefined}
+      documentTitle={{ enabled: false }}
+      onReady={() => updateTitle(navigationRef.current?.getRootState())}
+      onStateChange={updateTitle}
+    >
       <Stack.Navigator screenOptions={{ headerShown: false, cardStyle: { flex: 1 } }}>
         {!user ? (
           <Stack.Screen name="Login" component={LoginScreen} />

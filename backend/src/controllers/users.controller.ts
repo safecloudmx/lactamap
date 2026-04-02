@@ -26,6 +26,8 @@ export const usersController = {
         points: user.points,
         level: Math.floor(user.points / 100) + 1,
         avatarUrl: await signUrl(user.avatarUrl),
+        sex: user.sex ?? null,
+        birthDate: user.birthDate?.toISOString() ?? null,
         badges: user.badges.map((ub) => ub.badge),
         stats: {
           reviewsWritten: user._count.reviews,
@@ -41,19 +43,34 @@ export const usersController = {
   updateProfile: async (req: Request, res: Response) => {
     try {
       const userId = (req as any).user?.userId;
-      const { name } = req.body;
+      const { name, sex, birthDate } = req.body;
 
       if (!name || typeof name !== 'string' || name.trim().length < 2) {
         return res.status(400).json({ error: 'Name must be at least 2 characters' });
       }
 
+      const data: any = { name: name.trim() };
+
+      // sex: 'M', 'F', or null to clear
+      if (sex !== undefined) {
+        data.sex = sex === 'M' || sex === 'F' ? sex : null;
+      }
+
+      // birthDate: ISO string or null to clear
+      if (birthDate !== undefined) {
+        data.birthDate = birthDate ? new Date(birthDate) : null;
+      }
+
       const updated = await prisma.user.update({
         where: { id: userId },
-        data: { name: name.trim() },
-        select: { id: true, email: true, name: true, role: true, points: true, avatarUrl: true },
+        data,
+        select: { id: true, email: true, name: true, role: true, points: true, avatarUrl: true, sex: true, birthDate: true },
       });
 
-      res.json(updated);
+      res.json({
+        ...updated,
+        birthDate: updated.birthDate?.toISOString() ?? null,
+      });
     } catch (error) {
       res.status(500).json({ error: 'Error updating profile' });
     }

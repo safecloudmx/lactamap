@@ -8,7 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Camera, Check, ImagePlus, AlertTriangle, Plus, X, MapPin, Lock, Info } from 'lucide-react-native';
 import { Amenity, GenderAccess } from '../types';
 import { AMENITY_LABELS } from '../constants';
-import { createLactario } from '../services/api';
+import { createLactario, uploadPhoto } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { colors, spacing, typography, radii, shadows } from '../theme';
 import { AppHeader, Chip, LoadingOverlay } from '../components/ui';
@@ -96,6 +96,7 @@ export default function AddRoomScreen() {
   const [pickedLocation, setPickedLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [pickerCoords, setPickerCoords] = useState({ latitude: 25.6866, longitude: -100.3161 });
+  const [mapPickerHtml, setMapPickerHtml] = useState('');
   const mapPickerIframeRef = useRef<any>(null);
   const fileInputRef = useRef<any>(null);
 
@@ -259,6 +260,16 @@ export default function AddRoomScreen() {
         genderAccess: genderAccessValue,
         isPrivate,
       });
+
+      // Upload photo if user selected one
+      if (imageUri && result?.id) {
+        try {
+          await uploadPhoto(result.id, imageUri);
+        } catch {
+          // Photo upload failed silently — room was created, user can add photo later
+        }
+      }
+
       if (Platform.OS === 'web') {
         navigation.goBack();
         Alert.alert(
@@ -313,7 +324,7 @@ export default function AddRoomScreen() {
     <View style={styles.container}>
       <AppHeader
         title="Nueva Ubicación"
-        onBack={() => navigation.goBack()}
+        onBack={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Main')}
         rightAction={
           <TouchableOpacity onPress={handleSavePress} disabled={!canSave}>
             {isSaving
@@ -413,7 +424,7 @@ export default function AddRoomScreen() {
             {Platform.OS === 'web' ? (
               <iframe
                 ref={mapPickerIframeRef}
-                srcDoc={buildMapPickerHtml(pickerCoords.latitude, pickerCoords.longitude)}
+                srcDoc={mapPickerHtml}
                 allow="geolocation"
                 style={{ width: '100%', height: '100%', border: 'none' } as any}
                 title="Seleccionar ubicación"
@@ -528,7 +539,12 @@ export default function AddRoomScreen() {
                 onChangeText={isPrivileged ? setAddress : undefined}
                 editable={isPrivileged}
               />
-              <TouchableOpacity style={styles.mapPickerBtn} onPress={() => setShowMapPicker(true)}>
+              <TouchableOpacity style={styles.mapPickerBtn} onPress={() => {
+                const coords = pickedLocation ?? currentLocation;
+                setPickerCoords(coords);
+                setMapPickerHtml(buildMapPickerHtml(coords.latitude, coords.longitude));
+                setShowMapPicker(true);
+              }}>
                 <MapPin size={16} color={colors.primary[500]} />
                 <Text style={styles.mapPickerBtnText}>Seleccionar en el mapa</Text>
                 {pickedLocation && <Check size={14} color={colors.success} style={{ marginLeft: 'auto' } as any} />}
@@ -777,7 +793,7 @@ const styles = StyleSheet.create({
   pickerModalContainer: { flex: 1, backgroundColor: colors.white, marginTop: 60, borderTopLeftRadius: radii.xxl, borderTopRightRadius: radii.xxl },
   pickerModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.xxl, borderBottomWidth: 1, borderBottomColor: colors.slate[100] },
   pickerModalTitle: { ...typography.h4, color: colors.slate[800] },
-  pickerMapContainer: { flex: 1 },
+  pickerMapContainer: { flex: 1, minHeight: Platform.OS === 'web' ? 400 : undefined },
   mapUnavailable: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   pickerCoordsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.xxl, paddingVertical: spacing.md, backgroundColor: colors.slate[50] },
   pickerCoordsText: { ...typography.caption, color: colors.slate[600] },

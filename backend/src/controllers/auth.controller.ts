@@ -22,6 +22,8 @@ async function buildUserPayload(user: any) {
     points: user.points,
     level: Math.floor(Math.sqrt(user.points / 100)) + 1,
     avatarUrl: await signUrl(user.avatarUrl),
+    sex: user.sex ?? null,
+    birthDate: user.birthDate?.toISOString() ?? null,
     stats: { roomsAdded: 0, reviewsWritten: 0 },
   };
 }

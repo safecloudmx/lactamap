@@ -57,7 +57,7 @@ import {
 import { Lactario, LactarioFloor, Review } from '../types';
 import { getLactarioById, getReviews, createReview, updateReview, deleteReview, reportReview, deleteLactario, verifyLactario, unverifyLactario } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Rating, Card, AvatarInitials, PlaceholderImage } from '../components/ui';
+import { Rating, Card, AvatarInitials } from '../components/ui';
 import { colors, spacing, typography, radii, shadows } from '../theme';
 
 const AMENITY_ICONS: Record<string, React.ComponentType<any>> = {
@@ -248,9 +248,7 @@ export default function RoomDetailScreen() {
   const isAdmin = user?.role === 'ADMIN';
   const amenities = room.amenities || [];
   const hasPhotos = room.photos && room.photos.length > 0;
-  const photos = hasPhotos
-    ? room.photos
-    : [{ id: 'placeholder', url: '' }];
+  const photos = hasPhotos ? room.photos : [];
 
   const openLightbox = (index: number) => {
     setLightboxIndex(index);
@@ -305,79 +303,106 @@ export default function RoomDetailScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <RefreshableScroll onRefresh={fetchDetails} style={styles.container} contentContainerStyle={{flexGrow: 1}} bounces={false} scrollEnabled={true} nestedScrollEnabled={true} showsVerticalScrollIndicator={false}>
-        {/* Photo Carousel */}
-        <View style={styles.heroContainer}>
-          <ScrollView
-            ref={photoScrollRef}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            scrollEventThrottle={16}
-            scrollEnabled={true}
-            onScroll={(e) => {
-              const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-              setActivePhotoIndex(idx);
-            }}
-            style={styles.photoCarousel}
-          >
-            {photos.map((photo, idx) => (
-              <TouchableOpacity
-                key={photo.id}
-                activeOpacity={0.92}
-                onPress={() => photo.url ? openLightbox(idx) : undefined}
-                style={styles.photoSlide}
-              >
-                {photo.url ? (
+        {/* Photo Carousel or Compact Header */}
+        {hasPhotos ? (
+          <View style={styles.heroContainer}>
+            <ScrollView
+              ref={photoScrollRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              scrollEventThrottle={16}
+              scrollEnabled={true}
+              onScroll={(e) => {
+                const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+                setActivePhotoIndex(idx);
+              }}
+              style={styles.photoCarousel}
+            >
+              {photos.map((photo, idx) => (
+                <TouchableOpacity
+                  key={photo.id}
+                  activeOpacity={0.92}
+                  onPress={() => photo.url ? openLightbox(idx) : undefined}
+                  style={styles.photoSlide}
+                >
                   <Image
                     source={{ uri: photo.url }}
                     style={styles.heroImage}
                     resizeMode="cover"
                   />
-                ) : (
-                  <PlaceholderImage style={styles.heroImage} />
-                )}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          <LinearGradient
-            colors={['rgba(0,0,0,0.55)', 'transparent']}
-            style={styles.heroGradient}
-          />
-          <TouchableOpacity
-            style={[styles.backButton, { top: insets.top + spacing.sm }]}
-            onPress={() => navigation.goBack()}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <ArrowLeft size={24} color={colors.white} />
-          </TouchableOpacity>
-          <View style={[styles.heroActionsRight, { top: insets.top + spacing.sm }]}>
-            {canEdit && (
-              <TouchableOpacity
-                style={styles.heroActionBtn}
-                onPress={() => navigation.navigate('EditRoom', { room })}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Pencil size={20} color={colors.white} />
-              </TouchableOpacity>
-            )}
-            {isAdmin && (
-              <TouchableOpacity
-                style={[styles.heroActionBtn, { backgroundColor: 'rgba(220,38,38,0.7)' }]}
-                onPress={() => setDeleteModalVisible(true)}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Trash2 size={20} color={colors.white} />
-              </TouchableOpacity>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <LinearGradient
+              colors={['rgba(0,0,0,0.55)', 'transparent']}
+              style={styles.heroGradient}
+            />
+            <TouchableOpacity
+              style={[styles.backButton, { top: insets.top + spacing.sm }]}
+              onPress={() => navigation.goBack()}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <ArrowLeft size={24} color={colors.white} />
+            </TouchableOpacity>
+            <View style={[styles.heroActionsRight, { top: insets.top + spacing.sm }]}>
+              {canEdit && (
+                <TouchableOpacity
+                  style={styles.heroActionBtn}
+                  onPress={() => navigation.navigate('EditRoom', { room })}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <Pencil size={20} color={colors.white} />
+                </TouchableOpacity>
+              )}
+              {isAdmin && (
+                <TouchableOpacity
+                  style={[styles.heroActionBtn, { backgroundColor: 'rgba(220,38,38,0.7)' }]}
+                  onPress={() => setDeleteModalVisible(true)}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <Trash2 size={20} color={colors.white} />
+                </TouchableOpacity>
+              )}
+            </View>
+            {photos.length > 1 && (
+              <View style={styles.dotsContainer}>
+                {photos.map((_, idx) => (
+                  <View key={idx} style={[styles.dot, idx === activePhotoIndex && styles.dotActive]} />
+                ))}
+              </View>
             )}
           </View>
-          {photos.length > 1 && (
-            <View style={styles.dotsContainer}>
-              {photos.map((_, idx) => (
-                <View key={idx} style={[styles.dot, idx === activePhotoIndex && styles.dotActive]} />
-              ))}
+        ) : (
+          <View style={[styles.compactHeader, { paddingTop: insets.top + spacing.sm }]}>
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <ArrowLeft size={24} color={colors.slate[800]} />
+            </TouchableOpacity>
+            <View style={styles.compactHeaderActions}>
+              {canEdit && (
+                <TouchableOpacity
+                  style={styles.compactActionBtn}
+                  onPress={() => navigation.navigate('EditRoom', { room })}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <Pencil size={20} color={colors.slate[600]} />
+                </TouchableOpacity>
+              )}
+              {isAdmin && (
+                <TouchableOpacity
+                  style={[styles.compactActionBtn, { backgroundColor: colors.errorLight }]}
+                  onPress={() => setDeleteModalVisible(true)}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <Trash2 size={20} color={colors.error} />
+                </TouchableOpacity>
+              )}
             </View>
-          )}
-        </View>
+          </View>
+        )}
 
         {/* Lightbox Modal */}
         <Modal
@@ -1052,6 +1077,28 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.slate[100],
+  },
+  compactHeaderActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  compactActionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.slate[100],
     alignItems: 'center',
     justifyContent: 'center',
   },

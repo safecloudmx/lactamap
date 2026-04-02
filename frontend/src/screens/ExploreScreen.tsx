@@ -8,7 +8,7 @@ import { SearchX, LayoutGrid, List, MapPin, Star, BadgeCheck } from 'lucide-reac
 import { Lactario } from '../types';
 import { getLactarios } from '../services/api';
 import LactarioCard from '../components/LactarioCard';
-import { AppHeader, SearchBar, Chip, EmptyState, PlaceholderImage } from '../components/ui';
+import { AppHeader, SearchBar, Chip, EmptyState } from '../components/ui';
 import { colors, spacing, typography, radii, shadows } from '../theme';
 
 const PLACE_TYPE_FILTERS = [
@@ -95,9 +95,7 @@ export default function ExploreScreen() {
     >
       {item.imageUrl ? (
         <Image source={{ uri: item.imageUrl }} style={styles.listThumb} />
-      ) : (
-        <PlaceholderImage style={styles.listThumb} message="" />
-      )}
+      ) : null}
       <View style={styles.listInfo}>
         <Text style={styles.listName} numberOfLines={1}>{item.name}</Text>
         {item.address ? (

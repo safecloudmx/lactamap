@@ -12,24 +12,46 @@ import {
   ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Camera } from 'lucide-react-native';
+import { Camera, CalendarDays } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { updateUserProfile, uploadAvatar } from '../services/api';
 import { AppHeader, AvatarInitials } from '../components/ui';
+import { UserSex } from '../types';
 import { colors, spacing, typography, radii, shadows } from '../theme';
 
 let ImagePicker: any = null;
 try { ImagePicker = require('expo-image-picker'); } catch (_) {}
+
+type SexOption = { key: UserSex; label: string };
+const SEX_OPTIONS: SexOption[] = [
+  { key: null, label: 'No especificar' },
+  { key: 'F', label: 'Mujer' },
+  { key: 'M', label: 'Hombre' },
+];
+
+function formatDateDisplay(isoString: string | null | undefined): string {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  return d.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function toDateInputValue(isoString: string | null | undefined): string {
+  if (!isoString) return '';
+  return new Date(isoString).toISOString().slice(0, 10);
+}
 
 export default function EditProfileScreen() {
   const navigation = useNavigation<any>();
   const { user, updateUser } = useAuth();
 
   const [name, setName] = useState(user?.name || '');
+  const [sex, setSex] = useState<UserSex>(user?.sex ?? null);
+  const [birthDate, setBirthDate] = useState<string | null>(user?.birthDate ?? null);
   const [saving, setSaving] = useState(false);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const fileInputRef = useRef<any>(null);
+  const dateInputRef = useRef<any>(null);
 
   const currentAvatar = avatarUri || user?.avatarUrl || null;
 
@@ -86,8 +108,12 @@ export default function EditProfileScreen() {
 
     setSaving(true);
     try {
-      await updateUserProfile({ name: name.trim() });
-      await updateUser({ name: name.trim() });
+      await updateUserProfile({
+        name: name.trim(),
+        sex,
+        birthDate,
+      });
+      await updateUser({ name: name.trim(), sex, birthDate });
       navigation.goBack();
     } catch (error: any) {
       Alert.alert('Error', error?.response?.data?.message || 'No se pudo actualizar el perfil.');
@@ -158,6 +184,69 @@ export default function EditProfileScreen() {
                 <Text style={styles.readOnlyText}>{user?.email || ''}</Text>
               </View>
               <Text style={styles.helperText}>El correo no se puede modificar.</Text>
+            </View>
+
+            {/* Sex selector */}
+            <View style={styles.field}>
+              <Text style={styles.label}>Sexo <Text style={styles.optionalTag}>(opcional)</Text></Text>
+              <View style={styles.sexRow}>
+                {SEX_OPTIONS.map((opt) => (
+                  <TouchableOpacity
+                    key={String(opt.key)}
+                    style={[styles.sexOption, sex === opt.key && styles.sexOptionSelected]}
+                    onPress={() => setSex(opt.key)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.sexLabel, sex === opt.key && styles.sexLabelSelected]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={styles.helperText}>
+                Esto personaliza los textos de la app para ti.
+              </Text>
+            </View>
+
+            {/* Birth date */}
+            <View style={styles.field}>
+              <Text style={styles.label}>Fecha de nacimiento <Text style={styles.optionalTag}>(opcional)</Text></Text>
+              {Platform.OS === 'web' ? (
+                <View style={styles.dateInputWrapper}>
+                  <CalendarDays size={18} color={colors.slate[400]} />
+                  <input
+                    ref={dateInputRef}
+                    type="date"
+                    value={toDateInputValue(birthDate)}
+                    max={new Date().toISOString().slice(0, 10)}
+                    onChange={(e: any) => {
+                      const val = e.target.value;
+                      setBirthDate(val ? new Date(val + 'T00:00:00').toISOString() : null);
+                    }}
+                    style={{
+                      flex: 1,
+                      border: 'none',
+                      outline: 'none',
+                      background: 'transparent',
+                      fontSize: 15,
+                      color: '#1e293b',
+                      fontFamily: 'inherit',
+                    } as any}
+                  />
+                </View>
+              ) : (
+                <TouchableOpacity style={styles.dateInputWrapper} activeOpacity={0.7}>
+                  <CalendarDays size={18} color={colors.slate[400]} />
+                  <Text style={[styles.dateText, !birthDate && styles.datePlaceholder]}>
+                    {birthDate ? formatDateDisplay(birthDate) : 'Seleccionar fecha'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {birthDate && (
+                <TouchableOpacity onPress={() => setBirthDate(null)}>
+                  <Text style={styles.clearDateText}>Borrar fecha</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -231,6 +320,60 @@ const styles = StyleSheet.create({
   },
   readOnlyText: { ...typography.body, color: colors.slate[400] },
   helperText: { ...typography.caption, color: colors.slate[400] },
+  optionalTag: { ...typography.caption, color: colors.slate[400], fontWeight: '400' },
+  sexRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  sexOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.white,
+    borderWidth: 2,
+    borderColor: colors.slate[200],
+    borderRadius: radii.md,
+    paddingVertical: spacing.md,
+    ...shadows.sm,
+  },
+  sexOptionSelected: {
+    borderColor: colors.primary[500],
+    backgroundColor: colors.primary[50],
+  },
+  sexLabel: {
+    ...typography.smallBold,
+    color: colors.slate[600],
+  },
+  sexLabelSelected: {
+    color: colors.primary[700],
+  },
+  dateInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.slate[200],
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    ...shadows.sm,
+  },
+  dateText: {
+    ...typography.body,
+    color: colors.slate[800],
+    flex: 1,
+  },
+  datePlaceholder: {
+    color: colors.slate[400],
+  },
+  clearDateText: {
+    ...typography.caption,
+    color: colors.primary[500],
+    fontWeight: '600',
+  },
   saveButton: {
     backgroundColor: colors.primary[500],
     paddingVertical: spacing.lg,

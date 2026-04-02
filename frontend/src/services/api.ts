@@ -140,7 +140,7 @@ export const getLeaderboard = async () => {
   return response.data;
 };
 
-export const updateUserProfile = async (data: { name: string }) => {
+export const updateUserProfile = async (data: { name: string; sex?: string | null; birthDate?: string | null }) => {
   const response = await api.put('/users/profile', data);
   return response.data;
 };

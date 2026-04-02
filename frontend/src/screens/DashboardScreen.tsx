@@ -49,6 +49,7 @@ export default function DashboardScreen() {
 
   const fullName = user?.name || user?.email?.split('@')[0] || 'Visitante';
   const firstName = fullName.split(' ')[0];
+  const isMale = user?.sex === 'M';
 
   const loadData = useCallback(async () => {
     try {
@@ -133,7 +134,7 @@ export default function DashboardScreen() {
   const announcements = [
     {
       icon: Heart,
-      title: 'Bienvenida a LactaMap',
+      title: isMale ? 'Bienvenido a LactaMap' : 'Bienvenida a LactaMap',
       body: 'Encuentra espacios seguros y cómodos para ti y tu bebé. Tu comunidad te respalda.',
       color: colors.primary[500],
     },
@@ -177,7 +178,7 @@ export default function DashboardScreen() {
         <View style={styles.welcomeSection}>
           <Text style={styles.greeting}>Hola, {firstName}</Text>
           <Text style={styles.welcomeText}>
-            Bienvenida a LactaMap. Descubre los diferentes espacios que hay para ti y tu bebé. 
+            {isMale ? 'Bienvenido' : 'Bienvenida'} a LactaMap. Descubre los diferentes espacios que hay para ti y tu bebé.
           </Text>
         </View>
 

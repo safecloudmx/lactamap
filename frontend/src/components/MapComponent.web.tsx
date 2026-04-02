@@ -32,24 +32,60 @@ const ALL_ACTIVE: Record<FilterKey, boolean> = {
 let Location: any = null;
 try { Location = require('expo-location'); } catch (_) {}
 
+const LOCATION_CACHE_KEY = '@LactaMap:lastLocation';
+
 export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget }: MapComponentProps) {
   const iframeRef = useRef<any>(null);
   const [visibleCounts, setVisibleCounts] = useState<Record<FilterKey, number>>({
     LACTARIO: 0, CAMBIADOR: 0, BANO_FAMILIAR: 0, PUNTO_INTERES: 0,
   });
   const [activeFilters, setActiveFilters] = useState<Record<FilterKey, boolean>>(ALL_ACTIVE);
+  const [locating, setLocating] = useState(true);
   const activeFiltersRef = useRef(activeFilters);
   const userLocationSent = useRef(false);
 
+  // Read once at mount — never re-reads even when lactarios change (avoids iframe reload centering Monterrey)
+  const [initialCenter] = useState<{ lat: number; lng: number; zoom: number }>(() => {
+    try {
+      const cached = localStorage.getItem(LOCATION_CACHE_KEY);
+      if (cached) {
+        const { lat, lng } = JSON.parse(cached);
+        return { lat, lng, zoom: 16 };
+      }
+    } catch (_) {}
+    return { lat: 25.6866, lng: -100.3161, zoom: 13 };
+  });
+
   useEffect(() => { activeFiltersRef.current = activeFilters; }, [activeFilters]);
 
-  // Get user location from parent context and send to iframe
+  const sendLocationToMap = useCallback((lat: number, lng: number) => {
+    const send = () => iframeRef.current?.contentWindow?.postMessage({ type: 'userLocation', lat, lng }, '*');
+    send();
+    setTimeout(send, 800);
+    setTimeout(send, 2000);
+  }, []);
+
+  // Phase 1: Use cached location instantly, Phase 2: refresh with GPS
   useEffect(() => {
     if (userLocationSent.current) return;
-    (async () => {
+
+    // Phase 1 — send cached position immediately (< 1ms)
+    try {
+      const cached = localStorage.getItem(LOCATION_CACHE_KEY);
+      if (cached) {
+        const { lat, lng } = JSON.parse(cached);
+        userLocationSent.current = true;
+        sendLocationToMap(lat, lng);
+        setLocating(false);
+      }
+    } catch (_) {}
+
+    // Phase 2 — get fresh GPS and update
+    const getFreshLocation = async () => {
       try {
         let lat: number | null = null;
         let lng: number | null = null;
+
         if (Location) {
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status === 'granted') {
@@ -58,30 +94,32 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
             lng = loc.coords.longitude;
           }
         } else if (navigator.geolocation) {
-          const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-              enableHighAccuracy: false, timeout: 15000, maximumAge: 60000,
+          // Fresh high-accuracy position only — localStorage already handles instant centering
+          const fresh = await new Promise<GeolocationPosition | null>((resolve) =>
+            navigator.geolocation.getCurrentPosition(resolve, () => resolve(null), {
+              enableHighAccuracy: true, timeout: 10000, maximumAge: 0,
             })
           );
-          lat = pos.coords.latitude;
-          lng = pos.coords.longitude;
+          if (fresh) {
+            lat = fresh.coords.latitude;
+            lng = fresh.coords.longitude;
+          }
         }
+
         if (lat !== null && lng !== null) {
+          // Save to cache for next session
+          try { localStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify({ lat, lng })); } catch (_) {}
           userLocationSent.current = true;
-          // Wait for iframe to be ready, then send location
-          const sendLocation = () => {
-            iframeRef.current?.contentWindow?.postMessage(
-              { type: 'userLocation', lat, lng }, '*'
-            );
-          };
-          // Send immediately and also after a delay (iframe might not be ready)
-          sendLocation();
-          setTimeout(sendLocation, 1500);
-          setTimeout(sendLocation, 3000);
+          sendLocationToMap(lat, lng);
+          setLocating(false);
         }
-      } catch (_) {}
-    })();
-  }, [lactarios]);
+      } catch (_) {
+        setLocating(false);
+      }
+    };
+
+    getFreshLocation();
+  }, [lactarios, sendLocationToMap]);
 
   useEffect(() => {
     if (!zoomTarget || !iframeRef.current?.contentWindow) return;
@@ -100,6 +138,8 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
   }, []);
 
   const mapHtml = useMemo(() => {
+    const { lat: initLat, lng: initLng, zoom: initZoom } = initialCenter;
+
     const PIN_COLORS: Record<string, string> = {
       LACTARIO: '#f43f5e',
       CAMBIADOR: '#8b5cf6',
@@ -215,7 +255,7 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
 </head><body>
 <div id="map"></div>
 <script>
-  var map = L.map('map', { zoomControl: false }).setView([25.6866, -100.3161], 13);
+  var map = L.map('map', { zoomControl: false }).setView([${initLat}, ${initLng}], ${initZoom});
   L.control.zoom({ position: 'bottomright' }).addTo(map);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors',
@@ -257,17 +297,19 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
   map.on('zoomend', _updateCount);
   setTimeout(_updateCount, 800);
 
-  var _userMarkerAdded = false;
+  var _userMarker = null;
   function _addUserMarker(lat, lng) {
-    if (_userMarkerAdded) return;
-    _userMarkerAdded = true;
-    map.setView([lat, lng], 16);
     var userIcon = L.divIcon({
       className: '',
       html: '<div class="user-location-wrap"><div class="user-pulse"></div><div class="user-dot"></div></div>',
       iconSize: [60, 60], iconAnchor: [30, 30]
     });
-    L.marker([lat, lng], { icon: userIcon, zIndexOffset: 1000 }).addTo(map);
+    if (_userMarker) {
+      _userMarker.setLatLng([lat, lng]);
+    } else {
+      map.setView([lat, lng], 16);
+      _userMarker = L.marker([lat, lng], { icon: userIcon, zIndexOffset: 1000 }).addTo(map);
+    }
   }
 
   window.addEventListener('message', function(e) {
@@ -286,7 +328,7 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
   });
 <\/script>
 </body></html>`;
-  }, [lactarios]);
+  }, [lactarios, initialCenter]);
 
   useEffect(() => {
     const counts = { LACTARIO: 0, CAMBIADOR: 0, BANO_FAMILIAR: 0, PUNTO_INTERES: 0 } as Record<string, number>;
@@ -336,6 +378,13 @@ export default function MapComponent({ lactarios = [], onSelectRoom, zoomTarget 
         </View>
       )}
 
+      {locating && (
+        <View pointerEvents="none" style={styles.locatingBanner}>
+          <View style={styles.locatingDot} />
+          <Text style={styles.locatingText}>Obteniendo tu ubicación...</Text>
+        </View>
+      )}
+
       <View pointerEvents="box-none" style={styles.filterBarWrapper}>
         <View style={styles.filterBar}>
           {FILTER_ITEMS.map((item, i, arr) => (
@@ -371,6 +420,31 @@ const styles = StyleSheet.create({
   container: { flex: 1, position: 'relative' },
   fallback: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   fallbackText: { ...typography.body, color: colors.slate[400] },
+  locatingBanner: {
+    position: 'absolute',
+    top: spacing.md,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: 'rgba(255,255,255,0.93)',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.full,
+    ...shadows.md,
+    zIndex: 10,
+  },
+  locatingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary[500],
+  },
+  locatingText: {
+    ...typography.caption,
+    color: colors.slate[600],
+    fontWeight: '600',
+  },
   filterBarWrapper: {
     position: 'absolute',
     bottom: spacing.lg,

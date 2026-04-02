@@ -4,7 +4,7 @@ import { MapPin, Lock } from 'lucide-react-native';
 import { Lactario } from '../types';
 import { AMENITY_LABELS } from '../constants';
 import { colors, spacing, typography, radii } from '../theme';
-import { Card, Rating, StatusBadge, PlaceholderImage } from './ui';
+import { Card, Rating, StatusBadge } from './ui';
 
 interface LactarioCardProps {
   lactario: Lactario;
@@ -17,34 +17,49 @@ export default function LactarioCard({ lactario, onPress, showStatus }: Lactario
 
   return (
     <Card onPress={onPress} style={styles.card}>
-      <View style={styles.imageContainer}>
-        {lactario.imageUrl ? (
+      {lactario.imageUrl ? (
+        <View style={styles.imageContainer}>
           <Image
             source={{ uri: lactario.imageUrl }}
             style={styles.image}
           />
-        ) : (
-          <PlaceholderImage style={styles.image} />
-        )}
-        {showStatus && (
-          <View style={styles.statusOverlay}>
-            <StatusBadge status={lactario.status} />
-          </View>
-        )}
-        {lactario.isVerified && (
-          <View style={styles.verifiedBadge}>
-            <Text style={styles.verifiedText}>Verificado</Text>
-          </View>
-        )}
-        {lactario.isPrivate && (
-          <View style={styles.privateBadge}>
-            <Lock size={10} color="#fff" />
-            <Text style={styles.privateText}>Acceso Restringido</Text>
-          </View>
-        )}
-      </View>
+          {showStatus && (
+            <View style={styles.statusOverlay}>
+              <StatusBadge status={lactario.status} />
+            </View>
+          )}
+          {lactario.isVerified && (
+            <View style={styles.verifiedBadge}>
+              <Text style={styles.verifiedText}>Verificado</Text>
+            </View>
+          )}
+          {lactario.isPrivate && (
+            <View style={styles.privateBadge}>
+              <Lock size={10} color="#fff" />
+              <Text style={styles.privateText}>Acceso Restringido</Text>
+            </View>
+          )}
+        </View>
+      ) : null}
 
       <View style={styles.content}>
+        {/* Inline badges when no image */}
+        {!lactario.imageUrl && (showStatus || lactario.isVerified || lactario.isPrivate) && (
+          <View style={styles.inlineBadgesRow}>
+            {showStatus && <StatusBadge status={lactario.status} />}
+            {lactario.isVerified && (
+              <View style={styles.inlineVerifiedBadge}>
+                <Text style={styles.verifiedText}>Verificado</Text>
+              </View>
+            )}
+            {lactario.isPrivate && (
+              <View style={styles.inlinePrivateBadge}>
+                <Lock size={10} color="#fff" />
+                <Text style={styles.privateText}>Acceso Restringido</Text>
+              </View>
+            )}
+          </View>
+        )}
         <Text style={styles.name} numberOfLines={1}>{lactario.name}</Text>
 
         <View style={styles.row}>
@@ -171,5 +186,25 @@ const styles = StyleSheet.create({
     ...typography.captionBold,
     color: colors.slate[400],
     alignSelf: 'center',
+  },
+  inlineBadgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  inlineVerifiedBadge: {
+    backgroundColor: colors.success,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.sm,
+  },
+  inlinePrivateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#6366f1',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.sm,
   },
 });

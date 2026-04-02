@@ -87,6 +87,8 @@ export interface Badge {
   type: 'submission' | 'review';
 }
 
+export type UserSex = 'M' | 'F' | null;
+
 export interface User {
   id: string;
   email: string;
@@ -95,6 +97,8 @@ export interface User {
   points: number;
   level?: number;
   avatarUrl?: string | null;
+  sex?: UserSex;
+  birthDate?: string | null;
   badges?: any[];
   isGuest?: boolean;
   stats?: {

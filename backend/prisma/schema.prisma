@@ -102,6 +102,11 @@ model User {
   editProposals         LactarioEditProposal[] @relation("ProposedEdits")
   reviewedEditProposals LactarioEditProposal[] @relation("ReviewedEdits")
   reviewReports         ReviewReport[]
+  // Partner linking
+  sentInvites           PartnerInvite[]        @relation("InviteSender")
+  partnershipA          UserPartnership[]      @relation("PartnershipA")
+  partnershipB          UserPartnership[]      @relation("PartnershipB")
+  babyAccesses          BabyAccess[]
 }
 
 model Badge {
@@ -237,6 +242,7 @@ model Baby {
   sleepSessions   SleepSession[]
   diaperRecords   DiaperRecord[]
   growthRecords   GrowthRecord[]
+  accessGrants    BabyAccess[]
 }
 
 model NursingSession {
@@ -423,4 +429,39 @@ model GrowthPhoto {
   growthRecord   GrowthRecord @relation(fields: [growthRecordId], references: [id], onDelete: Cascade)
   url            String
   createdAt      DateTime     @default(now())
+}
+
+// === Partner Linking ===
+
+model PartnerInvite {
+  id             String   @id @default(uuid())
+  token          String   @unique @default(uuid())
+  senderId       String
+  sender         User     @relation("InviteSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipientEmail String
+  status         String   @default("PENDING") // PENDING, ACCEPTED, REJECTED, EXPIRED
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+}
+
+model UserPartnership {
+  id        String   @id @default(uuid())
+  userAId   String
+  userA     User     @relation("PartnershipA", fields: [userAId], references: [id], onDelete: Cascade)
+  userBId   String
+  userB     User     @relation("PartnershipB", fields: [userBId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userAId, userBId])
+}
+
+model BabyAccess {
+  id        String   @id @default(uuid())
+  babyId    String
+  baby      Baby     @relation(fields: [babyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([babyId, userId])
 }

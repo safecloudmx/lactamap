@@ -15,6 +15,7 @@ import pumpingSessionsRoutes from './routes/pumpingSessions.routes';
 import sleepSessionsRoutes from './routes/sleepSessions.routes';
 import diaperRecordsRoutes from './routes/diaperRecords.routes';
 import growthRecordsRoutes from './routes/growthRecords.routes';
+import partnershipsRoutes from './routes/partnerships.routes';
 
 dotenv.config();
 
@@ -68,6 +69,7 @@ app.use('/api/v1/pumping-sessions', pumpingSessionsRoutes);
 app.use('/api/v1/sleep-sessions', sleepSessionsRoutes);
 app.use('/api/v1/diaper-records', diaperRecordsRoutes);
 app.use('/api/v1/growth-records', growthRecordsRoutes);
+app.use('/api/v1/partnerships', partnershipsRoutes);
 
 // Health check
 app.get('/', (_req, res) => {

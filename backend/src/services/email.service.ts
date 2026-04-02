@@ -48,6 +48,38 @@ export async function sendVerificationEmail(email: string, name: string, otp: st
   });
 }
 
+export async function sendPartnerInviteEmail(
+  email: string,
+  recipientName: string | undefined,
+  senderName: string,
+  token: string,
+) {
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8081';
+  const inviteUrl = `${frontendUrl}/vincular?token=${token}`;
+
+  const content = `
+    <p style="color:#334155;font-size:15px;margin:0 0 8px">Hola${recipientName ? ` <strong>${recipientName}</strong>` : ''}👋</p>
+    <p style="color:#334155;font-size:15px;margin:0 0 20px">
+      <strong>${senderName}</strong> te invita a vincular sus cuentas de LactaMap para compartir los registros de sus bebés.
+    </p>
+    <div style="text-align:center;margin:24px 0">
+      <a href="${inviteUrl}" style="display:inline-block;background:#F43F5E;color:#fff;font-weight:700;font-size:15px;padding:14px 32px;border-radius:10px;text-decoration:none">
+        Ver invitación
+      </a>
+    </div>
+    <p style="color:#64748b;font-size:13px;text-align:center;margin:0 0 16px">Este enlace expira en <strong>24 horas</strong>.</p>
+    <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0 0 4px">Si no conoces a esta persona, ignora este mensaje.</p>
+    <p style="color:#94a3b8;font-size:11px;text-align:center;margin:0;word-break:break-all">${inviteUrl}</p>
+  `;
+
+  await getResend().emails.send({
+    from: FROM,
+    to: email,
+    subject: `${senderName} quiere vincularse contigo en LactaMap`,
+    html: brandHtml(content),
+  });
+}
+
 export async function sendPasswordResetEmail(email: string, otp: string) {
   const content = `
     <p style="color:#334155;font-size:15px;margin:0 0 20px">Recibimos una solicitud para restablecer tu contraseña. Usa este código:</p>

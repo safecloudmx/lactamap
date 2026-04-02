@@ -1,5 +1,48 @@
 export type Role = 'VISITOR' | 'CONTRIBUTOR' | 'DISTINGUISHED' | 'ELITE' | 'OWNER' | 'ADMIN';
 
+// === Partner Linking ===
+
+export interface PartnerUser {
+  id: string;
+  name?: string | null;
+  email: string;
+  avatarUrl?: string | null;
+}
+
+export interface Partnership {
+  id: string;
+  partner: PartnerUser;
+  createdAt: string;
+}
+
+export interface PendingInvite {
+  id: string;
+  recipientEmail: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface PartnershipStatus {
+  partnership: Partnership | null;
+  pendingInvite: PendingInvite | null;
+}
+
+export interface PartnerPreview {
+  invite: {
+    id: string;
+    token: string;
+    sender: PartnerUser;
+    expiresAt: string;
+  };
+  senderBabies: { id: string; name: string; birthDate?: string | null; avatarUrl?: string | null; createdAt: string }[];
+  recipientBabies: { id: string; name: string; birthDate?: string | null; avatarUrl?: string | null; createdAt: string }[];
+}
+
+export interface BabyMerge {
+  keepBabyId: string;
+  mergeBabyId: string;
+}
+
 export enum GenderAccess {
   WOMEN = 'Mujeres',
   MEN = 'Hombres',

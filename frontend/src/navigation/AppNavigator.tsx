@@ -41,6 +41,7 @@ const SCREEN_TITLES: Record<string, string> = {
   GrowthAdd: 'Registrar Crecimiento',
   AdminReview: 'Revisión Admin',
   PublicFolioDetail: 'Folio Público',
+  PartnerSync: 'Vincular Cuenta',
 };
 
 function getScreenTitle(routeName: string | undefined): string {
@@ -61,6 +62,7 @@ const linking: LinkingOptions<any> = {
   config: {
     screens: {
       PublicFolioDetail: 'folio-publico',
+      PartnerSync: 'vincular',
       Login: 'login',
       Main: {
         path: '',
@@ -139,6 +141,7 @@ import BabyDetailScreen from '../screens/BabyDetailScreen';
 import BabyEditScreen from '../screens/BabyEditScreen';
 import GrowthAddScreen from '../screens/GrowthAddScreen';
 import PumpingFolioDetailScreen from '../screens/PumpingFolioDetailScreen';
+import PartnerSyncScreen from '../screens/PartnerSyncScreen';
 
 import CustomTabBar from '../components/CustomTabBar';
 import DrawerContent from './DrawerContent';
@@ -333,10 +336,16 @@ export const AppNavigator = () => {
             />
           </>
         )}
-        {/* Public route — accessible without auth, placed after Login/Main so it's not the initial screen */}
+        {/* Public route — accessible without auth */}
         <Stack.Screen
           name="PublicFolioDetail"
           component={PumpingFolioDetailScreen}
+          options={{ presentation: 'card' }}
+        />
+        {/* Partner sync — accessible without auth so email link works before/after login */}
+        <Stack.Screen
+          name="PartnerSync"
+          component={PartnerSyncScreen}
           options={{ presentation: 'card' }}
         />
       </Stack.Navigator>

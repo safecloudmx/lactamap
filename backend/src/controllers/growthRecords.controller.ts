@@ -3,6 +3,7 @@ import prisma from '../lib/prisma';
 import sharp from 'sharp';
 import { uploadToS3, deleteFromS3, keyFromUrl, signUrl } from '../lib/s3';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { hasAccessToBaby } from '../lib/partnerships';
 
 const formatRecord = async (r: any) => ({
   ...r,
@@ -30,13 +31,11 @@ export const growthRecordsController = {
         return res.status(400).json({ error: 'babyId is required' });
       }
 
-      const baby = await prisma.baby.findUnique({ where: { id: babyId as string } });
-      if (!baby || baby.userId !== userId) {
-        return res.status(403).json({ error: 'Forbidden' });
-      }
+      const ok = await hasAccessToBaby(userId!, babyId as string);
+      if (!ok) return res.status(403).json({ error: 'Forbidden' });
 
       const records = await prisma.growthRecord.findMany({
-        where: { userId, babyId: babyId as string },
+        where: { babyId: babyId as string },
         orderBy: { measuredAt: 'desc' },
         include: { photos: true },
       });
@@ -59,10 +58,8 @@ export const growthRecordsController = {
         return res.status(400).json({ error: 'babyId and measuredAt are required' });
       }
 
-      const baby = await prisma.baby.findUnique({ where: { id: babyId } });
-      if (!baby || baby.userId !== userId) {
-        return res.status(403).json({ error: 'Forbidden' });
-      }
+      const ok = await hasAccessToBaby(userId!, babyId);
+      if (!ok) return res.status(403).json({ error: 'Forbidden' });
 
       const record = await prisma.growthRecord.create({
         data: {

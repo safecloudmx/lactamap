@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import prisma from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { getAccessibleBabyIds, hasAccessToBaby } from '../lib/partnerships';
 
 export const sleepSessionsController = {
   // GET /api/v1/sleep-sessions?babyId=&date=
@@ -9,8 +10,11 @@ export const sleepSessionsController = {
       const userId = req.user?.userId;
       const { babyId, date } = req.query;
 
-      const where: any = { userId };
-      if (babyId) where.babyId = babyId;
+      const sharedIds = await getAccessibleBabyIds(userId!);
+      const base = sharedIds.length > 0
+        ? { OR: [{ userId }, { babyId: { in: sharedIds } }] }
+        : { userId };
+      const where: any = babyId ? { babyId } : base;
       if (date) {
         const dayStart = new Date(date as string);
         const dayEnd = new Date(dayStart);
@@ -62,10 +66,8 @@ export const sleepSessionsController = {
       }
 
       if (babyId) {
-        const baby = await prisma.baby.findUnique({ where: { id: babyId } });
-        if (!baby || baby.userId !== userId) {
-          return res.status(403).json({ error: 'Baby not found or does not belong to user' });
-        }
+        const ok = await hasAccessToBaby(userId!, babyId);
+        if (!ok) return res.status(403).json({ error: 'Baby not found or access denied' });
       }
 
       const session = await prisma.sleepSession.create({

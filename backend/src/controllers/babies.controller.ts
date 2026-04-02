@@ -3,6 +3,7 @@ import sharp from 'sharp';
 import prisma from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { uploadToS3, signUrl, keyFromUrl, deleteFromS3 } from '../lib/s3';
+import { getAccessibleBabyIds, hasAccessToBaby } from '../lib/partnerships';
 
 const BABY_SELECT = {
   id: true,
@@ -25,9 +26,12 @@ export const babiesController = {
   // GET /api/v1/babies
   getAll: async (req: AuthRequest, res: Response) => {
     try {
-      const userId = req.user?.userId;
+      const userId = req.user?.userId!;
+      const sharedIds = await getAccessibleBabyIds(userId);
       const babies = await prisma.baby.findMany({
-        where: { userId },
+        where: sharedIds.length > 0
+          ? { OR: [{ userId }, { id: { in: sharedIds } }] }
+          : { userId },
         orderBy: { createdAt: 'asc' },
         select: BABY_SELECT,
       });

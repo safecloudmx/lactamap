@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import prisma from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { getAccessibleBabyIds, hasAccessToBaby } from '../lib/partnerships';
 
 export const nursingSessionsController = {
   // GET /api/v1/nursing-sessions?babyId=&date=
@@ -9,8 +10,13 @@ export const nursingSessionsController = {
       const userId = req.user?.userId;
       const { babyId, date } = req.query;
 
-      const where: any = { userId };
-      if (babyId) where.babyId = babyId as string;
+      const sharedIds = await getAccessibleBabyIds(userId!);
+      const base = sharedIds.length > 0
+        ? { OR: [{ userId }, { babyId: { in: sharedIds } }] }
+        : { userId };
+      const where: any = babyId
+        ? { babyId: babyId as string }
+        : base;
       if (date) {
         const day = new Date(date as string);
         const next = new Date(day);
@@ -47,12 +53,10 @@ export const nursingSessionsController = {
         return res.status(400).json({ error: 'startedAt, endedAt, and totalDuration are required' });
       }
 
-      // Verify baby belongs to user if provided
+      // Verify user has access to the baby (owns it or has BabyAccess)
       if (babyId) {
-        const baby = await prisma.baby.findUnique({ where: { id: babyId } });
-        if (!baby || baby.userId !== userId) {
-          return res.status(403).json({ error: 'Invalid babyId' });
-        }
+        const ok = await hasAccessToBaby(userId!, babyId);
+        if (!ok) return res.status(403).json({ error: 'Invalid babyId' });
       }
 
       const session = await prisma.nursingSession.create({

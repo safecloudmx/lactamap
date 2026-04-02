@@ -594,4 +594,40 @@ export const deleteGrowthPhoto = async (recordId: string, photoId: string) => {
   return response.data;
 };
 
+// === Partner Linking ===
+
+export const getPartnershipStatus = async () => {
+  const response = await api.get('/partnerships/status');
+  return response.data;
+};
+
+export const sendPartnerInvite = async (email: string) => {
+  const response = await api.post('/partnerships/invite', { email });
+  return response.data;
+};
+
+export const cancelPartnerInvite = async () => {
+  const response = await api.delete('/partnerships/invite');
+  return response.data;
+};
+
+export const getPartnerPreview = async (token: string) => {
+  const response = await api.get('/partnerships/preview', { params: { token } });
+  return response.data;
+};
+
+export const confirmPartnership = async (data: {
+  token: string;
+  action: 'accept' | 'reject';
+  babyMerges?: { keepBabyId: string; mergeBabyId: string }[];
+}) => {
+  const response = await api.post('/partnerships/confirm', data);
+  return response.data;
+};
+
+export const dissolvePartnership = async () => {
+  const response = await api.delete('/partnerships');
+  return response.data;
+};
+
 export default api;

@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  TextInput, Image,
+  TextInput, Image, Modal, ActivityIndicator, Platform,
 } from 'react-native';
 import RefreshableScroll from '../components/ui/RefreshableScroll';
 import { confirmAlert, infoAlert } from '../services/crossPlatformAlert';
@@ -9,15 +9,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, DrawerActions } from '@react-navigation/native';
 import {
   Menu, Edit3, Award, TrendingUp, FolderHeart,
-  Trophy, ChevronRight, MapPin, MessageSquare,
-  Plus, Pencil, Trash2, Check, X, Baby as BabyIcon,
+  ChevronRight, MapPin, MessageSquare,
+  Plus, Pencil, Check, X, Baby as BabyIcon,
+  Users, Info, Link2Off, Clock,
 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
-import { getUserProfile } from '../services/api';
+import {
+  getUserProfile,
+  getPartnershipStatus, sendPartnerInvite, cancelPartnerInvite, dissolvePartnership,
+} from '../services/api';
 import { BADGES } from '../constants';
 import { colors, spacing, typography, radii, shadows } from '../theme';
 import { AvatarInitials } from '../components/ui';
-import { Baby } from '../types';
+import { Baby, PartnershipStatus } from '../types';
 import * as nursingStorage from '../services/nursingStorage';
 import LoginPromptModal from '../components/LoginPromptModal';
 
@@ -34,12 +38,27 @@ export default function ProfileScreen() {
   const [editingBaby, setEditingBaby] = useState<Baby | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
 
+  // Partnership state
+  const [partnerStatus, setPartnerStatus] = useState<PartnershipStatus | null>(null);
+  const [partnershipLoading, setPartnershipLoading] = useState(false);
+  const [partnerEmail, setPartnerEmail] = useState('');
+  const [sendingInvite, setSendingInvite] = useState(false);
+  const [showInfoModal, setShowInfoModal] = useState(false);
+
   const loadData = useCallback(async () => {
     if (!user?.isGuest) {
       try {
         const data = await getUserProfile();
         setProfileData(data);
       } catch (_) {}
+      try {
+        setPartnershipLoading(true);
+        const status = await getPartnershipStatus();
+        setPartnerStatus(status);
+      } catch (_) {
+      } finally {
+        setPartnershipLoading(false);
+      }
     }
     const list = await nursingStorage.getBabies();
     setBabies(list);
@@ -143,6 +162,59 @@ export default function ProfileScreen() {
   };
 
   const isEditingBaby = editingBaby !== null;
+
+  // === Partnership handlers ===
+  const handleSendInvite = async () => {
+    const email = partnerEmail.trim().toLowerCase();
+    if (!email) return;
+    setSendingInvite(true);
+    try {
+      await sendPartnerInvite(email);
+      setPartnerEmail('');
+      infoAlert('Invitación enviada', `Se envió un correo a ${email} para vincular las cuentas.`);
+      const status = await getPartnershipStatus();
+      setPartnerStatus(status);
+    } catch (err: any) {
+      infoAlert('Error', err?.response?.data?.error || 'No se pudo enviar la invitación.');
+    } finally {
+      setSendingInvite(false);
+    }
+  };
+
+  const handleCancelInvite = () => {
+    confirmAlert(
+      'Cancelar invitación',
+      '¿Quieres cancelar la invitación pendiente?',
+      async () => {
+        try {
+          await cancelPartnerInvite();
+          const status = await getPartnershipStatus();
+          setPartnerStatus(status);
+        } catch (err: any) {
+          infoAlert('Error', err?.response?.data?.error || 'No se pudo cancelar.');
+        }
+      }
+    );
+  };
+
+  const handleDissolve = () => {
+    confirmAlert(
+      'Desvincular cuenta',
+      `¿Seguro que quieres desvincular tu cuenta de ${partnerStatus?.partnership?.partner?.name || partnerStatus?.partnership?.partner?.email}? Cada usuario conservará solo sus propios bebés y registros.`,
+      async () => {
+        try {
+          await dissolvePartnership();
+          const status = await getPartnershipStatus();
+          setPartnerStatus(status);
+          // Reload babies — shared babies will disappear
+          const list = await nursingStorage.getBabies();
+          setBabies(list);
+        } catch (err: any) {
+          infoAlert('Error', err?.response?.data?.error || 'No se pudo desvincular.');
+        }
+      }
+    );
+  };
 
   return (
     <RefreshableScroll
@@ -326,6 +398,152 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* Partner Linking */}
+      {!user?.isGuest && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.sectionTitleRow}>
+              <Users size={20} color={colors.primary[500]} />
+              <Text style={styles.sectionTitle}>Vinculación de cuenta</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setShowInfoModal(true)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Info size={18} color={colors.slate[400]} />
+            </TouchableOpacity>
+          </View>
+
+          {partnershipLoading ? (
+            <ActivityIndicator color={colors.primary[500]} style={{ marginTop: spacing.md }} />
+          ) : partnerStatus?.partnership ? (
+            /* Active partnership */
+            <View style={styles.partnerCard}>
+              <AvatarInitials
+                name={partnerStatus.partnership.partner.name || partnerStatus.partnership.partner.email}
+                size="md"
+                imageUrl={partnerStatus.partnership.partner.avatarUrl}
+              />
+              <View style={styles.partnerInfo}>
+                <Text style={styles.partnerName}>
+                  {partnerStatus.partnership.partner.name || partnerStatus.partnership.partner.email}
+                </Text>
+                <Text style={styles.partnerEmail}>{partnerStatus.partnership.partner.email}</Text>
+                <Text style={styles.partnerSince}>
+                  Vinculados desde {new Date(partnerStatus.partnership.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={handleDissolve} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Link2Off size={20} color={colors.error} />
+              </TouchableOpacity>
+            </View>
+          ) : partnerStatus?.pendingInvite ? (
+            /* Pending invite sent */
+            <View style={styles.pendingCard}>
+              <Clock size={18} color={colors.warning} />
+              <View style={styles.pendingInfo}>
+                <Text style={styles.pendingTitle}>Invitación pendiente</Text>
+                <Text style={styles.pendingEmail}>{partnerStatus.pendingInvite.recipientEmail}</Text>
+                <Text style={styles.pendingExpiry}>
+                  Expira {new Date(partnerStatus.pendingInvite.expiresAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={handleCancelInvite}>
+                <X size={20} color={colors.slate[400]} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            /* No partnership — invite form */
+            <View style={styles.inviteForm}>
+              <Text style={styles.inviteHint}>
+                Vincula tu cuenta con la de tu pareja para compartir los registros de sus bebés.
+              </Text>
+              <View style={styles.inviteRow}>
+                {Platform.OS === 'web' ? (
+                  <input
+                    type="email"
+                    placeholder="Correo de tu pareja"
+                    value={partnerEmail}
+                    onChange={(e: any) => setPartnerEmail(e.target.value)}
+                    onKeyDown={(e: any) => { if (e.key === 'Enter') handleSendInvite(); }}
+                    style={{
+                      flex: 1, border: '1px solid #e2e8f0', borderRadius: 8,
+                      padding: '10px 14px', fontSize: 14, outline: 'none',
+                      fontFamily: 'inherit', color: '#1e293b', background: '#fff',
+                    } as any}
+                  />
+                ) : (
+                  <TextInput
+                    style={styles.inviteInput}
+                    placeholder="Correo de tu pareja"
+                    placeholderTextColor={colors.slate[400]}
+                    value={partnerEmail}
+                    onChangeText={setPartnerEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    returnKeyType="send"
+                    onSubmitEditing={handleSendInvite}
+                  />
+                )}
+                <TouchableOpacity
+                  style={[styles.inviteBtn, (!partnerEmail.trim() || sendingInvite) && styles.inviteBtnDisabled]}
+                  onPress={handleSendInvite}
+                  disabled={!partnerEmail.trim() || sendingInvite}
+                >
+                  {sendingInvite
+                    ? <ActivityIndicator size="small" color={colors.white} />
+                    : <Text style={styles.inviteBtnText}>Invitar</Text>
+                  }
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Info tooltip modal */}
+      <Modal
+        visible={showInfoModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowInfoModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowInfoModal(false)}
+        >
+          <View style={styles.infoModal}>
+            <View style={styles.infoModalHeader}>
+              <Users size={22} color={colors.primary[500]} />
+              <Text style={styles.infoModalTitle}>Vinculación de cuentas</Text>
+            </View>
+            <Text style={styles.infoModalBody}>
+              Esta función te permite sincronizar los datos de tus bebés con la cuenta de tu pareja, para que ambos puedan registrar y consultar las sesiones de lactancia, extracción, sueño, pañales y crecimiento.
+            </Text>
+            <Text style={styles.infoModalSubtitle}>¿Qué implica vincular una cuenta?</Text>
+            {[
+              'Ambos usuarios podrán ver y crear registros para todos los bebés compartidos.',
+              'Si fusionas dos bebés, sus registros se unirán de forma permanente e irreversible.',
+              'Al desvincular las cuentas, cada usuario conservará solo sus propios bebés y registros.',
+              'Tu perfil, correo y contraseña permanecen completamente privados.',
+              'Solo puedes tener una cuenta vinculada a la vez.',
+            ].map((item, i) => (
+              <View key={i} style={styles.infoModalItem}>
+                <Text style={styles.infoModalBullet}>•</Text>
+                <Text style={styles.infoModalItemText}>{item}</Text>
+              </View>
+            ))}
+            <TouchableOpacity
+              style={styles.infoModalClose}
+              onPress={() => setShowInfoModal(false)}
+            >
+              <Text style={styles.infoModalCloseText}>Entendido</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <LoginPromptModal
         visible={showLoginModal}
@@ -593,4 +811,95 @@ const styles = StyleSheet.create({
     color: colors.slate[700],
     flex: 1,
   },
+  // Partner linking
+  partnerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.white,
+    borderRadius: radii.lg,
+    padding: spacing.lg,
+    ...shadows.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary[400],
+  },
+  partnerInfo: { flex: 1, gap: 2 },
+  partnerName: { ...typography.bodyBold, color: colors.slate[800] },
+  partnerEmail: { ...typography.caption, color: colors.slate[500] },
+  partnerSince: { ...typography.caption, color: colors.primary[500], marginTop: 2 },
+
+  pendingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.white,
+    borderRadius: radii.lg,
+    padding: spacing.lg,
+    ...shadows.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.warning,
+  },
+  pendingInfo: { flex: 1, gap: 2 },
+  pendingTitle: { ...typography.smallBold, color: colors.slate[700] },
+  pendingEmail: { ...typography.caption, color: colors.slate[600] },
+  pendingExpiry: { ...typography.caption, color: colors.warning },
+
+  inviteForm: { gap: spacing.md },
+  inviteHint: { ...typography.caption, color: colors.slate[500], lineHeight: 18 },
+  inviteRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
+  inviteInput: {
+    flex: 1,
+    ...typography.small,
+    color: colors.slate[800],
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.slate[200],
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  inviteBtn: {
+    backgroundColor: colors.primary[500],
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 70,
+  },
+  inviteBtnDisabled: { opacity: 0.5 },
+  inviteBtnText: { ...typography.smallBold, color: colors.white },
+
+  // Info modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  infoModal: {
+    backgroundColor: colors.white,
+    borderRadius: radii.xl,
+    padding: spacing.xl,
+    width: '100%',
+    maxWidth: 420,
+    gap: spacing.md,
+    ...shadows.lg,
+  },
+  infoModalHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  infoModalTitle: { ...typography.h4, color: colors.slate[800] },
+  infoModalBody: { ...typography.small, color: colors.slate[600], lineHeight: 20 },
+  infoModalSubtitle: { ...typography.smallBold, color: colors.slate[700], marginTop: spacing.xs },
+  infoModalItem: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
+  infoModalBullet: { ...typography.smallBold, color: colors.primary[500], marginTop: 1 },
+  infoModalItemText: { ...typography.small, color: colors.slate[600], flex: 1, lineHeight: 20 },
+  infoModalClose: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.primary[500],
+    paddingVertical: spacing.md,
+    borderRadius: radii.md,
+    alignItems: 'center',
+  },
+  infoModalCloseText: { ...typography.smallBold, color: colors.white },
 });

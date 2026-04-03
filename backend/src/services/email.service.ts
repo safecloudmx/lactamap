@@ -54,7 +54,7 @@ export async function sendPartnerInviteEmail(
   senderName: string,
   token: string,
 ) {
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8081';
+  const frontendUrl = process.env.FRONTEND_URL;
   const inviteUrl = `${frontendUrl}/vincular?token=${token}`;
 
   const content = `

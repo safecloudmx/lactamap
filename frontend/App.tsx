@@ -3,6 +3,7 @@ import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from './src/context/AuthContext';
+import { SleepTimerProvider } from './src/context/SleepTimerContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 
 class ErrorBoundary extends React.Component<
@@ -45,7 +46,9 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ErrorBoundary>
         <AuthProvider>
-          <AppNavigator />
+          <SleepTimerProvider>
+            <AppNavigator />
+          </SleepTimerProvider>
         </AuthProvider>
       </ErrorBoundary>
     </GestureHandlerRootView>

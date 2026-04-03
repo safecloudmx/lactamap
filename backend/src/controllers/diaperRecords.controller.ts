@@ -104,6 +104,11 @@ export const diaperRecordsController = {
       if (!existing) return res.status(404).json({ error: 'Record not found' });
       if (existing.userId !== userId) return res.status(403).json({ error: 'Forbidden' });
 
+      if (babyId) {
+        const ok = await hasAccessToBaby(userId!, babyId);
+        if (!ok) return res.status(403).json({ error: 'Invalid babyId' });
+      }
+
       if (type !== undefined && !VALID_TYPES.includes(type)) {
         return res.status(400).json({ error: 'type must be one of: wet, dirty, both' });
       }

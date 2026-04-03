@@ -12,7 +12,8 @@ import {
   Baby as BabyIcon,
 } from 'lucide-react-native';
 import { colors, spacing, typography, radii, shadows } from '../theme';
-import { useSleepTimer, formatTime, formatDuration } from '../hooks/useSleepTimer';
+import { useSleepTimerContext } from '../context/SleepTimerContext';
+import { formatTime, formatDuration } from '../hooks/useSleepTimer';
 import { SleepSession, Baby } from '../types';
 import * as sleepStorage from '../services/sleepStorage';
 
@@ -48,9 +49,8 @@ function formatTimeShort(d: Date): string {
 export default function SleepTimerScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
-  const timer = useSleepTimer();
+  const timer = useSleepTimerContext();
 
-  const [selectedBabyId, setSelectedBabyId] = useState<string | null>(null);
   const [babies, setBabies] = useState<Baby[]>([]);
   const [notes, setNotes] = useState('');
   const [photos, setPhotos] = useState<{ uri: string }[]>([]);
@@ -65,9 +65,15 @@ export default function SleepTimerScreen() {
     ]);
     setBabies(babiesList);
     setTodaySessions(sessions);
-    const activeId = await sleepStorage.getActiveBabyId();
-    if (activeId) setSelectedBabyId(activeId);
-  }, []);
+    // Only load active baby from storage if no timer is running
+    if (!timer.hasStarted) {
+      const activeId = await sleepStorage.getActiveBabyId();
+      if (activeId) {
+        const baby = babiesList.find((b: Baby) => b.id === activeId);
+        if (baby) timer.setBaby(activeId, baby.name);
+      }
+    }
+  }, [timer.hasStarted]);
 
   useFocusEffect(
     useCallback(() => {
@@ -85,7 +91,7 @@ export default function SleepTimerScreen() {
 
     const session: SleepSession = {
       ...result,
-      babyId: selectedBabyId ?? undefined,
+      babyId: timer.babyId ?? undefined,
       notes,
       photos: photos.map((p) => p.uri),
     };
@@ -151,7 +157,7 @@ export default function SleepTimerScreen() {
     ? 'En pausa'
     : timer.hasStarted
     ? 'Finalizado'
-    : babies.length > 0 && selectedBabyId
+    : babies.length > 0 && timer.babyId
     ? `Último: ${todaySessions.length > 0 ? getLastSleepLabel(todaySessions[0]) : 'Sin registros'}`
     : todaySessions.length > 0
     ? `Último: ${getLastSleepLabel(todaySessions[0])}`
@@ -329,14 +335,15 @@ export default function SleepTimerScreen() {
                   contentContainerStyle={styles.babyChipsRow}
                 >
                   {babies.map((baby) => {
-                    const isSelected = selectedBabyId === baby.id;
+                    const isSelected = timer.babyId === baby.id;
                     return (
                       <TouchableOpacity
                         key={baby.id}
                         style={[styles.babyChip, isSelected && styles.babyChipSelected]}
                         onPress={() => {
                           const newId = isSelected ? null : baby.id;
-                          setSelectedBabyId(newId);
+                          const newName = isSelected ? null : baby.name;
+                          timer.setBaby(newId, newName);
                           sleepStorage.setActiveBabyId(newId);
                         }}
                         activeOpacity={0.7}

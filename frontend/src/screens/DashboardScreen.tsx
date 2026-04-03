@@ -9,9 +9,10 @@ import { useFocusEffect, useNavigation, DrawerActions } from '@react-navigation/
 import {
   Menu, MapPin, Timer, BookOpen, Phone, ChevronRight,
   Baby, Heart, Star, Shield,
-  ToolCaseIcon,
+  ToolCaseIcon, Moon,
 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
+import { useSleepTimerContext } from '../context/SleepTimerContext';
 import { getLactarios } from '../services/api';
 import { Lactario } from '../types';
 import { colors, spacing, typography, radii, shadows } from '../theme';
@@ -40,10 +41,20 @@ interface PlaceWithDistance extends Lactario {
   distance: number;
 }
 
+function formatElapsed(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
 export default function DashboardScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
+  const sleepTimer = useSleepTimerContext();
   const [nearbyCount, setNearbyCount] = useState(0);
   const [nearbyPlaces, setNearbyPlaces] = useState<PlaceWithDistance[]>([]);
 
@@ -182,6 +193,27 @@ export default function DashboardScreen() {
           </Text>
         </View>
 
+        {/* Active Sleep Timer Banner */}
+        {sleepTimer.hasStarted && (
+          <TouchableOpacity
+            style={styles.sleepBanner}
+            onPress={() => navigation.navigate('SleepTimer')}
+            activeOpacity={0.8}
+          >
+            <View style={styles.sleepBannerLeft}>
+              <Moon size={18} color="#7c3aed" />
+              <View>
+                <Text style={styles.sleepBannerTitle}>
+                  Sueño {sleepTimer.isPaused ? 'en pausa' : 'en curso'}
+                  {sleepTimer.babyName ? ` · ${sleepTimer.babyName}` : ''}
+                </Text>
+                <Text style={styles.sleepBannerTime}>{formatElapsed(sleepTimer.elapsedTime)}</Text>
+              </View>
+            </View>
+            <ChevronRight size={16} color="#7c3aed" />
+          </TouchableOpacity>
+        )}
+
         {/* Quick Tools Grid */}
         <View style={styles.toolsGrid}>
           {tools.map((tool, i) => (
@@ -303,6 +335,33 @@ const styles = StyleSheet.create({
   welcomeText: {
     ...typography.body,
     color: colors.primary[200],
+  },
+  sleepBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f5f3ff',
+    borderWidth: 1,
+    borderColor: '#a78bfa',
+    borderRadius: radii.lg,
+    padding: spacing.lg,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.xl,
+    gap: spacing.md,
+  },
+  sleepBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  sleepBannerTitle: {
+    ...typography.smallBold,
+    color: '#6d28d9',
+  },
+  sleepBannerTime: {
+    ...typography.caption,
+    color: '#7c3aed',
   },
   toolsGrid: {
     flexDirection: 'row',

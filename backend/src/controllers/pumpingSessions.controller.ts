@@ -5,6 +5,7 @@ import { uploadToS3, deleteFromS3, keyFromUrl, signUrl } from '../lib/s3';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { generateUniqueFolio, buildFolio } from '../lib/folio';
 import { calculateExpiration } from '../lib/expiration';
+import { hasAccessToBaby } from '../lib/partnerships';
 
 const VALID_SIDES = ['LEFT', 'RIGHT', 'BOTH'];
 const VALID_STORAGE = ['FROZEN', 'REFRIGERATED', 'CONSUMED'];
@@ -223,11 +224,10 @@ export const pumpingSessionsController = {
 
       if (babyId !== undefined) {
         if (babyId) {
-          const baby = await prisma.baby.findUnique({ where: { id: babyId } });
-          if (!baby || baby.userId !== userId) {
-            return res.status(403).json({ error: 'Invalid babyId' });
-          }
-          resolvedBabyName = baby.name;
+          const ok = await hasAccessToBaby(userId!, babyId);
+          if (!ok) return res.status(403).json({ error: 'Invalid babyId' });
+          const baby = await prisma.baby.findUnique({ where: { id: babyId }, select: { name: true } });
+          resolvedBabyName = baby?.name ?? null;
         } else {
           resolvedBabyName = null;
         }

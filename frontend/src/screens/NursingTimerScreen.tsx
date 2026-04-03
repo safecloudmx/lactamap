@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
 } from 'react-native';
@@ -10,7 +10,8 @@ import {
   ArrowLeft, Play, Pause, RotateCcw, Baby, Clock, Trash2,
 } from 'lucide-react-native';
 import { colors, spacing, typography, radii, shadows } from '../theme';
-import { useNursingTimer, formatTime, formatDuration } from '../hooks/useNursingTimer';
+import { useNursingTimerContext } from '../context/NursingTimerContext';
+import { formatTime, formatDuration } from '../hooks/useNursingTimer';
 import { FeedingSession } from '../types';
 import * as nursingStorage from '../services/nursingStorage';
 import BabySelector from '../components/BabySelector';
@@ -24,16 +25,21 @@ export default function NursingTimerScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
 
-  const timer = useNursingTimer();
+  const timer = useNursingTimerContext();
 
-  const [selectedBabyId, setSelectedBabyId] = useState<string | null>(null);
   const [todaySessions, setTodaySessions] = useState<FeedingSession[]>([]);
 
-  // Load last selected baby
+  // Load last selected baby only if no session is active
   useEffect(() => {
-    nursingStorage.getActiveBabyId().then((id) => {
-      if (id) setSelectedBabyId(id);
-    });
+    if (!timer.activeSide && timer.totalTime === 0) {
+      nursingStorage.getActiveBabyId().then(async (id) => {
+        if (id) {
+          const babies = await nursingStorage.getBabies();
+          const baby = babies.find((b: any) => b.id === id);
+          if (baby) timer.setBaby(id, baby.name);
+        }
+      });
+    }
   }, []);
 
   // Load today's sessions on focus
@@ -56,8 +62,11 @@ export default function NursingTimerScreen() {
 
     const session: FeedingSession = {
       ...result,
-      babyId: selectedBabyId ?? undefined,
+      id: Date.now().toString(),
+      babyId: timer.babyId ?? undefined,
       notes: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
     await nursingStorage.saveSession(session);
@@ -105,8 +114,17 @@ export default function NursingTimerScreen() {
         {/* Baby Selector */}
         <View style={styles.section}>
           <BabySelector
-            selectedBabyId={selectedBabyId}
-            onSelectBaby={setSelectedBabyId}
+            selectedBabyId={timer.babyId}
+            onSelectBaby={(id) => {
+              if (!id) { timer.setBaby(null, null); return; }
+              // Look up name from storage babies — BabySelector reloads them internally,
+              // so we grab from nursingStorage synchronously via the babies list it manages.
+              // We pass only the id here; name is resolved in the context via a best-effort lookup.
+              nursingStorage.getBabies().then((list: any[]) => {
+                const baby = list.find((b) => b.id === id);
+                timer.setBaby(id, baby?.name ?? null);
+              });
+            }}
           />
         </View>
 

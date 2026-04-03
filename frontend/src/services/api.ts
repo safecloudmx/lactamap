@@ -630,4 +630,51 @@ export const dissolvePartnership = async () => {
   return response.data;
 };
 
+// === Active Timers ===
+
+export const pushActiveTimer = async (data: {
+  type: 'nursing' | 'sleep';
+  startedAt: string;
+  leftMs?: number;
+  rightMs?: number;
+  activeSide?: 'left' | 'right' | null;
+  pausedAt?: string | null;
+  totalPausedMs?: number;
+  babyId?: string | null;
+  babyName?: string | null;
+}) => {
+  const response = await api.put('/active-timers', data);
+  return response.data;
+};
+
+export const clearActiveTimer = async (type: 'nursing' | 'sleep') => {
+  const response = await api.delete(`/active-timers/${type}`);
+  return response.data;
+};
+
+export const getPartnerActiveTimers = async () => {
+  const response = await api.get('/active-timers/partner');
+  return response.data;
+};
+
+export const pushPartnerActiveTimer = async (data: {
+  type: 'nursing' | 'sleep';
+  startedAt: string;
+  leftMs?: number;
+  rightMs?: number;
+  activeSide?: 'left' | 'right' | null;
+  pausedAt?: string | null;
+  totalPausedMs?: number;
+  babyId?: string | null;
+  babyName?: string | null;
+}) => {
+  const response = await api.put('/active-timers/partner', data);
+  return response.data;
+};
+
+export const clearPartnerActiveTimer = async (type: 'nursing' | 'sleep') => {
+  const response = await api.delete(`/active-timers/partner/${type}`);
+  return response.data;
+};
+
 export default api;

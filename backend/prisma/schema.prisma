@@ -107,6 +107,7 @@ model User {
   partnershipA          UserPartnership[]      @relation("PartnershipA")
   partnershipB          UserPartnership[]      @relation("PartnershipB")
   babyAccesses          BabyAccess[]
+  activeTimers          ActiveTimer[]
 }
 
 model Badge {
@@ -464,4 +465,29 @@ model BabyAccess {
   createdAt DateTime @default(now())
 
   @@unique([babyId, userId])
+}
+
+// Shared live timer state — one row per user per timer type (upserted on every action)
+model ActiveTimer {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type          String    // "nursing" | "sleep"
+
+  startedAt     DateTime
+  // Nursing only — ms accumulated per side at the moment of the last side-change or pause
+  leftMs        Int       @default(0)
+  rightMs       Int       @default(0)
+  activeSide    String?   // "left" | "right" | null
+
+  // Pause tracking
+  pausedAt      DateTime? // non-null = currently paused
+  totalPausedMs Int       @default(0) // ms of completed pauses before current one
+
+  babyId        String?
+  babyName      String?
+
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([userId, type])
 }

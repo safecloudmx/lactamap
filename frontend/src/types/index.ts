@@ -43,6 +43,23 @@ export interface BabyMerge {
   mergeBabyId: string;
 }
 
+// === Active Timers (shared live state) ===
+
+export interface ActiveTimerState {
+  id: string;
+  userId: string;
+  type: 'nursing' | 'sleep';
+  startedAt: string;       // ISO
+  leftMs: number;
+  rightMs: number;
+  activeSide: 'left' | 'right' | null;
+  pausedAt: string | null; // ISO — non-null = currently paused
+  totalPausedMs: number;
+  babyId: string | null;
+  babyName: string | null;
+  updatedAt: string;
+}
+
 export enum GenderAccess {
   WOMEN = 'Mujeres',
   MEN = 'Hombres',

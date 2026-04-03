@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { pushActiveTimer, clearActiveTimer } from '../services/api';
 
 const STORAGE_KEY = 'sleep_timer_active';
 
@@ -16,8 +17,8 @@ export interface SleepTimerContextValue {
   isRunning: boolean;
   hasStarted: boolean;
   isPaused: boolean;
-  elapsedTime: number;   // seconds
-  pauseTime: number;     // seconds
+  elapsedTime: number;
+  pauseTime: number;
   sessionStartedAt: Date | null;
   babyId: string | null;
   babyName: string | null;
@@ -27,6 +28,7 @@ export interface SleepTimerContextValue {
   finish: () => { startedAt: string; endedAt: string; totalDuration: number; totalPauseTime: number } | null;
   reset: () => void;
   setBaby: (id: string | null, name: string | null) => void;
+  loadFromRemote: (remote: { startedAt: string; pausedAt: string | null; totalPausedMs: number; babyId: string | null; babyName: string | null }) => void;
 }
 
 const SleepTimerContext = createContext<SleepTimerContextValue | null>(null);
@@ -45,7 +47,6 @@ export function SleepTimerProvider({ children }: { children: React.ReactNode }) 
   const [babyId, setBabyIdState] = useState<string | null>(null);
   const [babyName, setBabyNameState] = useState<string | null>(null);
 
-  // Internal refs for persistence calculations
   const startedAtMsRef = useRef<number | null>(null);
   const totalPausedMsRef = useRef<number>(0);
   const pausedAtMsRef = useRef<number | null>(null);
@@ -53,7 +54,14 @@ export function SleepTimerProvider({ children }: { children: React.ReactNode }) 
   const pauseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const wasPausedRef = useRef(false);
 
-  const persist = useCallback(async (data: PersistedTimer | null) => {
+  const babyIdRef = useRef<string | null>(null);
+  const babyNameRef = useRef<string | null>(null);
+  const isRunningRef = useRef(false);
+  babyIdRef.current = babyId;
+  babyNameRef.current = babyName;
+  isRunningRef.current = isRunning;
+
+  const persistLocal = useCallback(async (data: PersistedTimer | null) => {
     try {
       if (data) {
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -61,6 +69,20 @@ export function SleepTimerProvider({ children }: { children: React.ReactNode }) 
         await AsyncStorage.removeItem(STORAGE_KEY);
       }
     } catch (_) {}
+  }, []);
+
+  const syncServer = useCallback((overrides?: { pausedAt?: number | null; totalPausedMs?: number }) => {
+    if (!startedAtMsRef.current) return;
+    pushActiveTimer({
+      type: 'sleep',
+      startedAt: new Date(startedAtMsRef.current).toISOString(),
+      pausedAt: overrides?.pausedAt !== undefined
+        ? (overrides.pausedAt ? new Date(overrides.pausedAt).toISOString() : null)
+        : (pausedAtMsRef.current ? new Date(pausedAtMsRef.current).toISOString() : null),
+      totalPausedMs: overrides?.totalPausedMs ?? totalPausedMsRef.current,
+      babyId: babyIdRef.current,
+      babyName: babyNameRef.current,
+    }).catch(() => {});
   }, []);
 
   // Restore from AsyncStorage on mount
@@ -78,6 +100,8 @@ export function SleepTimerProvider({ children }: { children: React.ReactNode }) 
         setSessionStartedAt(new Date(saved.startedAtMs));
         setBabyIdState(saved.babyId);
         setBabyNameState(saved.babyName);
+        babyIdRef.current = saved.babyId;
+        babyNameRef.current = saved.babyName;
 
         if (saved.isRunning) {
           const elapsedMs = (now - saved.startedAtMs) - saved.totalPausedMs;
@@ -85,7 +109,6 @@ export function SleepTimerProvider({ children }: { children: React.ReactNode }) 
           setIsRunning(true);
           wasPausedRef.current = false;
         } else if (saved.pausedAtMs) {
-          // Was paused: calculate elapsed up to when it was paused
           const elapsedMs = (saved.pausedAtMs - saved.startedAtMs) - saved.totalPausedMs;
           setElapsedTime(Math.max(0, Math.floor(elapsedMs / 1000)));
           wasPausedRef.current = true;
@@ -119,34 +142,38 @@ export function SleepTimerProvider({ children }: { children: React.ReactNode }) 
     }
     wasPausedRef.current = false;
     setIsRunning(true);
-    persist({
+    const snap: PersistedTimer = {
       startedAtMs: startedAtMsRef.current!,
       isRunning: true,
       totalPausedMs: totalPausedMsRef.current,
       pausedAtMs: null,
-      babyId,
-      babyName,
-    });
-  }, [babyId, babyName, persist]);
+      babyId: babyIdRef.current,
+      babyName: babyNameRef.current,
+    };
+    persistLocal(snap);
+    syncServer({ pausedAt: null, totalPausedMs: totalPausedMsRef.current });
+  }, [persistLocal, syncServer]);
 
   const pause = useCallback(() => {
-    if (!isRunning) return;
+    if (!isRunningRef.current) return;
     const now = Date.now();
     pausedAtMsRef.current = now;
     wasPausedRef.current = true;
     setIsRunning(false);
-    persist({
+    const snap: PersistedTimer = {
       startedAtMs: startedAtMsRef.current!,
       isRunning: false,
       totalPausedMs: totalPausedMsRef.current,
       pausedAtMs: now,
-      babyId,
-      babyName,
-    });
-  }, [isRunning, babyId, babyName, persist]);
+      babyId: babyIdRef.current,
+      babyName: babyNameRef.current,
+    };
+    persistLocal(snap);
+    syncServer({ pausedAt: now, totalPausedMs: totalPausedMsRef.current });
+  }, [persistLocal, syncServer]);
 
   const resume = useCallback(() => {
-    if (isRunning || !wasPausedRef.current) return;
+    if (isRunningRef.current || !wasPausedRef.current) return;
     const now = Date.now();
     if (pausedAtMsRef.current) {
       totalPausedMsRef.current += now - pausedAtMsRef.current;
@@ -154,15 +181,17 @@ export function SleepTimerProvider({ children }: { children: React.ReactNode }) 
     pausedAtMsRef.current = null;
     wasPausedRef.current = false;
     setIsRunning(true);
-    persist({
+    const snap: PersistedTimer = {
       startedAtMs: startedAtMsRef.current!,
       isRunning: true,
       totalPausedMs: totalPausedMsRef.current,
       pausedAtMs: null,
-      babyId,
-      babyName,
-    });
-  }, [isRunning, babyId, babyName, persist]);
+      babyId: babyIdRef.current,
+      babyName: babyNameRef.current,
+    };
+    persistLocal(snap);
+    syncServer({ pausedAt: null, totalPausedMs: totalPausedMsRef.current });
+  }, [persistLocal, syncServer]);
 
   const finish = useCallback(() => {
     if (elapsedTime === 0) return null;
@@ -182,9 +211,10 @@ export function SleepTimerProvider({ children }: { children: React.ReactNode }) 
     totalPausedMsRef.current = 0;
     pausedAtMsRef.current = null;
     wasPausedRef.current = false;
-    persist(null);
+    persistLocal(null);
+    clearActiveTimer('sleep').catch(() => {});
     return result;
-  }, [elapsedTime, pauseTime, sessionStartedAt, persist]);
+  }, [elapsedTime, pauseTime, sessionStartedAt, persistLocal]);
 
   const reset = useCallback(() => {
     setIsRunning(false);
@@ -195,23 +225,69 @@ export function SleepTimerProvider({ children }: { children: React.ReactNode }) 
     totalPausedMsRef.current = 0;
     pausedAtMsRef.current = null;
     wasPausedRef.current = false;
-    persist(null);
-  }, [persist]);
+    persistLocal(null);
+    clearActiveTimer('sleep').catch(() => {});
+  }, [persistLocal]);
 
   const setBaby = useCallback((id: string | null, name: string | null) => {
     setBabyIdState(id);
     setBabyNameState(name);
+    babyIdRef.current = id;
+    babyNameRef.current = name;
     if (startedAtMsRef.current) {
-      persist({
+      persistLocal({
         startedAtMs: startedAtMsRef.current,
-        isRunning,
+        isRunning: isRunningRef.current,
         totalPausedMs: totalPausedMsRef.current,
         pausedAtMs: pausedAtMsRef.current,
         babyId: id,
         babyName: name,
       });
+      syncServer({});
     }
-  }, [isRunning, persist]);
+  }, [persistLocal, syncServer]);
+
+  const loadFromRemote = useCallback((remote: {
+    startedAt: string;
+    pausedAt: string | null;
+    totalPausedMs: number;
+    babyId: string | null;
+    babyName: string | null;
+  }) => {
+    const now = Date.now();
+    const startMs = new Date(remote.startedAt).getTime();
+    startedAtMsRef.current = startMs;
+    totalPausedMsRef.current = remote.totalPausedMs;
+    setSessionStartedAt(new Date(startMs));
+    setBabyIdState(remote.babyId);
+    setBabyNameState(remote.babyName);
+    babyIdRef.current = remote.babyId;
+    babyNameRef.current = remote.babyName;
+
+    if (remote.pausedAt) {
+      const pausedMs = new Date(remote.pausedAt).getTime();
+      pausedAtMsRef.current = pausedMs;
+      const elapsed = (pausedMs - startMs) - remote.totalPausedMs;
+      setElapsedTime(Math.max(0, Math.floor(elapsed / 1000)));
+      wasPausedRef.current = true;
+      setIsRunning(false);
+    } else {
+      pausedAtMsRef.current = null;
+      const elapsed = (now - startMs) - remote.totalPausedMs;
+      setElapsedTime(Math.max(0, Math.floor(elapsed / 1000)));
+      wasPausedRef.current = false;
+      setIsRunning(true);
+    }
+
+    persistLocal({
+      startedAtMs: startMs,
+      isRunning: !remote.pausedAt,
+      totalPausedMs: remote.totalPausedMs,
+      pausedAtMs: remote.pausedAt ? new Date(remote.pausedAt).getTime() : null,
+      babyId: remote.babyId,
+      babyName: remote.babyName,
+    });
+  }, [persistLocal]);
 
   const hasStarted = sessionStartedAt !== null;
   const isPaused = !isRunning && hasStarted && elapsedTime > 0;
@@ -220,7 +296,7 @@ export function SleepTimerProvider({ children }: { children: React.ReactNode }) 
     <SleepTimerContext.Provider value={{
       isRunning, hasStarted, isPaused, elapsedTime, pauseTime,
       sessionStartedAt, babyId, babyName,
-      start, pause, resume, finish, reset, setBaby,
+      start, pause, resume, finish, reset, setBaby, loadFromRemote,
     }}>
       {children}
     </SleepTimerContext.Provider>

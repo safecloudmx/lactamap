@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   Linking, Platform,
@@ -9,12 +9,17 @@ import { useFocusEffect, useNavigation, DrawerActions } from '@react-navigation/
 import {
   Menu, MapPin, Timer, BookOpen, Phone, ChevronRight,
   Baby, Heart, Star, Shield,
-  ToolCaseIcon, Moon,
+  ToolCaseIcon, Moon, Pause, Play, Square,
 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { useSleepTimerContext } from '../context/SleepTimerContext';
-import { getLactarios } from '../services/api';
-import { Lactario } from '../types';
+import { useNursingTimerContext } from '../context/NursingTimerContext';
+import {
+  getLactarios, getPartnerActiveTimers,
+  pushPartnerActiveTimer, clearPartnerActiveTimer,
+  createNursingSessionOnServer, createSleepSessionOnServer,
+} from '../services/api';
+import { Lactario, ActiveTimerState, FeedingSide } from '../types';
 import { colors, spacing, typography, radii, shadows } from '../theme';
 
 let Location: any = null;
@@ -50,17 +55,177 @@ function formatElapsed(seconds: number): string {
   return `${s}s`;
 }
 
+function computePartnerElapsed(t: ActiveTimerState): number {
+  if (t.type === 'sleep') {
+    if (t.pausedAt) {
+      return Math.max(0, Math.floor(
+        (new Date(t.pausedAt).getTime() - new Date(t.startedAt).getTime() - t.totalPausedMs) / 1000
+      ));
+    }
+    return Math.max(0, Math.floor(
+      (Date.now() - new Date(t.startedAt).getTime() - t.totalPausedMs) / 1000
+    ));
+  }
+  // nursing: accumulate from leftMs/rightMs + running time since last server update
+  let leftMs = t.leftMs;
+  let rightMs = t.rightMs;
+  if (!t.pausedAt && t.activeSide) {
+    const sinceUpdate = Date.now() - new Date(t.updatedAt).getTime();
+    if (t.activeSide === 'left') leftMs += sinceUpdate;
+    else rightMs += sinceUpdate;
+  }
+  return Math.max(0, Math.floor((leftMs + rightMs) / 1000));
+}
+
 export default function DashboardScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const sleepTimer = useSleepTimerContext();
+  const nursingTimer = useNursingTimerContext();
   const [nearbyCount, setNearbyCount] = useState(0);
   const [nearbyPlaces, setNearbyPlaces] = useState<PlaceWithDistance[]>([]);
+  const [partnerTimers, setPartnerTimers] = useState<ActiveTimerState[]>([]);
+  const [partnerElapsed, setPartnerElapsed] = useState<Record<string, number>>({});
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const fullName = user?.name || user?.email?.split('@')[0] || 'Visitante';
   const firstName = fullName.split(' ')[0];
   const isMale = user?.sex === 'M';
+
+  const loadPartnerTimers = useCallback(async () => {
+    try {
+      const timers: ActiveTimerState[] = await getPartnerActiveTimers();
+      setPartnerTimers(timers);
+      const elapsed: Record<string, number> = {};
+      for (const t of timers) elapsed[t.id] = computePartnerElapsed(t);
+      setPartnerElapsed(elapsed);
+    } catch (_) {
+      setPartnerTimers([]);
+    }
+  }, []);
+
+  // Tick elapsed for running partner timers
+  useEffect(() => {
+    const hasRunning = partnerTimers.some(t => !t.pausedAt);
+    if (!hasRunning) return;
+    const id = setInterval(() => {
+      setPartnerElapsed(() => {
+        const next: Record<string, number> = {};
+        for (const t of partnerTimers) next[t.id] = computePartnerElapsed(t);
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [partnerTimers]);
+
+  const handlePartnerPause = useCallback(async (t: ActiveTimerState) => {
+    setActionLoading(`${t.id}-pause`);
+    try {
+      const now = Date.now();
+      let leftMs = t.leftMs;
+      let rightMs = t.rightMs;
+      if (t.type === 'nursing' && !t.pausedAt && t.activeSide) {
+        const sinceUpdate = now - new Date(t.updatedAt).getTime();
+        if (t.activeSide === 'left') leftMs += sinceUpdate;
+        else rightMs += sinceUpdate;
+      }
+      await pushPartnerActiveTimer({
+        type: t.type as 'nursing' | 'sleep',
+        startedAt: t.startedAt,
+        leftMs,
+        rightMs,
+        activeSide: t.activeSide,
+        pausedAt: new Date(now).toISOString(),
+        totalPausedMs: t.totalPausedMs,
+        babyId: t.babyId,
+        babyName: t.babyName,
+      });
+      await loadPartnerTimers();
+    } catch (_) {} finally {
+      setActionLoading(null);
+    }
+  }, [loadPartnerTimers]);
+
+  const handlePartnerResume = useCallback(async (t: ActiveTimerState) => {
+    setActionLoading(`${t.id}-resume`);
+    try {
+      const now = Date.now();
+      const addedPause = t.pausedAt ? now - new Date(t.pausedAt).getTime() : 0;
+      await pushPartnerActiveTimer({
+        type: t.type as 'nursing' | 'sleep',
+        startedAt: t.startedAt,
+        leftMs: t.leftMs,
+        rightMs: t.rightMs,
+        activeSide: t.activeSide,
+        pausedAt: null,
+        totalPausedMs: t.totalPausedMs + addedPause,
+        babyId: t.babyId,
+        babyName: t.babyName,
+      });
+      await loadPartnerTimers();
+    } catch (_) {} finally {
+      setActionLoading(null);
+    }
+  }, [loadPartnerTimers]);
+
+  const handlePartnerStop = useCallback(async (t: ActiveTimerState) => {
+    setActionLoading(`${t.id}-stop`);
+    try {
+      const now = new Date();
+      if (t.type === 'nursing') {
+        let leftMs = t.leftMs;
+        let rightMs = t.rightMs;
+        if (!t.pausedAt && t.activeSide) {
+          const sinceUpdate = now.getTime() - new Date(t.updatedAt).getTime();
+          if (t.activeSide === 'left') leftMs += sinceUpdate;
+          else rightMs += sinceUpdate;
+        }
+        const leftDuration = Math.floor(leftMs / 1000);
+        const rightDuration = Math.floor(rightMs / 1000);
+        const totalDuration = leftDuration + rightDuration;
+        if (totalDuration > 0) {
+          let lastSide: FeedingSide = 'both';
+          if (leftMs > 0 && rightMs === 0) lastSide = 'left';
+          else if (rightMs > 0 && leftMs === 0) lastSide = 'right';
+          await createNursingSessionOnServer({
+            babyId: t.babyId || undefined,
+            startedAt: t.startedAt,
+            endedAt: now.toISOString(),
+            leftDuration,
+            rightDuration,
+            totalDuration,
+            totalPauseTime: Math.floor(t.totalPausedMs / 1000),
+            lastSide,
+          });
+        }
+      } else {
+        let totalDuration: number;
+        if (t.pausedAt) {
+          totalDuration = Math.floor(
+            (new Date(t.pausedAt).getTime() - new Date(t.startedAt).getTime() - t.totalPausedMs) / 1000
+          );
+        } else {
+          totalDuration = Math.floor(
+            (now.getTime() - new Date(t.startedAt).getTime() - t.totalPausedMs) / 1000
+          );
+        }
+        if (totalDuration > 0) {
+          await createSleepSessionOnServer({
+            babyId: t.babyId || undefined,
+            startedAt: t.startedAt,
+            endedAt: now.toISOString(),
+            totalDuration,
+            totalPauseTime: Math.floor(t.totalPausedMs / 1000),
+          });
+        }
+      }
+      await clearPartnerActiveTimer(t.type as 'nursing' | 'sleep');
+      setPartnerTimers(prev => prev.filter(x => x.id !== t.id));
+    } catch (_) {} finally {
+      setActionLoading(null);
+    }
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
@@ -101,7 +266,10 @@ export default function DashboardScreen() {
   }, []);
 
   useFocusEffect(
-    useCallback(() => { loadData(); }, [loadData])
+    useCallback(() => {
+      loadData();
+      loadPartnerTimers();
+    }, [loadData, loadPartnerTimers])
   );
 
   const tools = [
@@ -181,7 +349,7 @@ export default function DashboardScreen() {
       </View>
 
       <RefreshableScroll
-        onRefresh={loadData}
+        onRefresh={() => { loadData(); loadPartnerTimers(); }}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -192,6 +360,87 @@ export default function DashboardScreen() {
             {isMale ? 'Bienvenido' : 'Bienvenida'} a LactaMap. Descubre los diferentes espacios que hay para ti y tu bebé.
           </Text>
         </View>
+
+        {/* Partner Active Timer Banners */}
+        {partnerTimers.map(t => {
+          const elapsed = partnerElapsed[t.id] ?? computePartnerElapsed(t);
+          const isPaused = !!t.pausedAt;
+          const isNursing = t.type === 'nursing';
+          const label = isNursing
+            ? `Lactancia de tu pareja${t.babyName ? ` · ${t.babyName}` : ''}`
+            : `Sueño de tu pareja${t.babyName ? ` · ${t.babyName}` : ''}`;
+          const timeLabel = isNursing && t.activeSide
+            ? `${formatElapsed(elapsed)} · ${t.activeSide === 'left' ? 'Izq' : 'Der'}`
+            : formatElapsed(elapsed);
+          return (
+            <View key={t.id} style={styles.partnerBanner}>
+              <View style={styles.sleepBannerLeft}>
+                {isNursing
+                  ? <Baby size={18} color="#7c3aed" />
+                  : <Moon size={18} color="#7c3aed" />}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.partnerBannerTitle}>{label}</Text>
+                  <Text style={styles.partnerBannerTime}>
+                    {isPaused ? 'En pausa · ' : 'En curso · '}{timeLabel}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.partnerBannerActions}>
+                {isPaused ? (
+                  <TouchableOpacity
+                    style={[styles.partnerActionBtn, styles.partnerResumeBtn]}
+                    onPress={() => handlePartnerResume(t)}
+                    disabled={actionLoading !== null}
+                  >
+                    <Play size={13} color="#fff" />
+                    <Text style={styles.partnerActionText}>Reanudar</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.partnerActionBtn, styles.partnerPauseBtn]}
+                    onPress={() => handlePartnerPause(t)}
+                    disabled={actionLoading !== null}
+                  >
+                    <Pause size={13} color="#7c3aed" />
+                    <Text style={[styles.partnerActionText, { color: '#7c3aed' }]}>Pausar</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[styles.partnerActionBtn, styles.partnerStopBtn]}
+                  onPress={() => handlePartnerStop(t)}
+                  disabled={actionLoading !== null}
+                >
+                  <Square size={13} color="#fff" />
+                  <Text style={styles.partnerActionText}>Detener</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          );
+        })}
+
+        {/* Active Nursing Timer Banner */}
+        {nursingTimer.totalTime > 0 && (
+          <TouchableOpacity
+            style={[styles.sleepBanner, styles.nursingBanner]}
+            onPress={() => navigation.navigate('NursingTimer')}
+            activeOpacity={0.8}
+          >
+            <View style={styles.sleepBannerLeft}>
+              <Baby size={18} color={colors.primary[600]} />
+              <View>
+                <Text style={[styles.sleepBannerTitle, styles.nursingBannerTitle]}>
+                  Lactancia {nursingTimer.isPaused ? 'en pausa' : 'en curso'}
+                  {nursingTimer.babyName ? ` · ${nursingTimer.babyName}` : ''}
+                </Text>
+                <Text style={[styles.sleepBannerTime, styles.nursingBannerTime]}>
+                  {formatElapsed(nursingTimer.totalTime)}
+                  {nursingTimer.activeSide ? ` · ${nursingTimer.activeSide === 'left' ? 'Izq' : 'Der'}` : ''}
+                </Text>
+              </View>
+            </View>
+            <ChevronRight size={16} color={colors.primary[600]} />
+          </TouchableOpacity>
+        )}
 
         {/* Active Sleep Timer Banner */}
         {sleepTimer.hasStarted && (
@@ -336,6 +585,16 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.primary[200],
   },
+  nursingBanner: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[300],
+  },
+  nursingBannerTitle: {
+    color: colors.primary[700],
+  },
+  nursingBannerTime: {
+    color: colors.primary[500],
+  },
   sleepBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -362,6 +621,52 @@ const styles = StyleSheet.create({
   sleepBannerTime: {
     ...typography.caption,
     color: '#7c3aed',
+  },
+  partnerBanner: {
+    backgroundColor: '#faf5ff',
+    borderWidth: 1,
+    borderColor: '#a78bfa',
+    borderRadius: radii.lg,
+    padding: spacing.lg,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.xl,
+    gap: spacing.md,
+  },
+  partnerBannerTitle: {
+    ...typography.smallBold,
+    color: '#6d28d9',
+  },
+  partnerBannerTime: {
+    ...typography.caption,
+    color: '#7c3aed',
+  },
+  partnerBannerActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  partnerActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.md,
+    gap: spacing.xs,
+  },
+  partnerPauseBtn: {
+    backgroundColor: '#ede9fe',
+    borderWidth: 1,
+    borderColor: '#a78bfa',
+  },
+  partnerResumeBtn: {
+    backgroundColor: '#7c3aed',
+  },
+  partnerStopBtn: {
+    backgroundColor: '#ef4444',
+  },
+  partnerActionText: {
+    ...typography.caption,
+    fontWeight: '600' as const,
+    color: '#fff',
   },
   toolsGrid: {
     flexDirection: 'row',

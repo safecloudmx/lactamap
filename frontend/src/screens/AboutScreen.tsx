@@ -24,7 +24,7 @@ export default function AboutScreen() {
 
         {/* Title */}
         <Text style={styles.appName}>LactaMap - Acerca de</Text>
-        <Text style={styles.version}>v0.1-260324-3</Text>
+        <Text style={styles.version}>v0.1-260402-1</Text>
 
         {/* Mission */}
         <Text style={styles.mission}>

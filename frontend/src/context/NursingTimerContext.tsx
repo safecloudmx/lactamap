@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useRef, useEffect, useCallb
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FeedingSide } from '../types';
 import { pushActiveTimer, clearActiveTimer } from '../services/api';
+import { useSocket } from './SocketContext';
 
 const STORAGE_KEY = 'nursing_timer_active';
 
@@ -49,6 +50,7 @@ export function useNursingTimerContext(): NursingTimerContextValue {
 }
 
 export function NursingTimerProvider({ children }: { children: React.ReactNode }) {
+  const { socket } = useSocket();
   const [activeSide, setActiveSide] = useState<Side>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [leftTime, setLeftTime] = useState(0);
@@ -379,6 +381,37 @@ export function NursingTimerProvider({ children }: { children: React.ReactNode }
       babyName: remote.babyName,
     });
   }, [persistLocal]);
+
+  // Listen for partner socket events that affect this user's nursing timer
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleUpdated = (data: any) => {
+      if (data.type !== 'nursing') return;
+      loadFromRemote({
+        startedAt: data.startedAt,
+        leftMs: data.leftMs ?? 0,
+        rightMs: data.rightMs ?? 0,
+        activeSide: data.activeSide ?? null,
+        pausedAt: data.pausedAt ?? null,
+        totalPausedMs: data.totalPausedMs ?? 0,
+        babyId: data.babyId ?? null,
+        babyName: data.babyName ?? null,
+      });
+    };
+
+    const handleCleared = (data: any) => {
+      if (data.type !== 'nursing') return;
+      reset();
+    };
+
+    socket.on('timer:updated', handleUpdated);
+    socket.on('timer:cleared', handleCleared);
+    return () => {
+      socket.off('timer:updated', handleUpdated);
+      socket.off('timer:cleared', handleCleared);
+    };
+  }, [socket, loadFromRemote, reset]);
 
   const totalTime = leftTime + rightTime;
   const isPaused = !isRunning && activeSide !== null && totalTime > 0;

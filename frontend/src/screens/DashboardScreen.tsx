@@ -12,6 +12,7 @@ import {
   ToolCaseIcon, Moon, Pause, Play, Square,
 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import { useSleepTimerContext } from '../context/SleepTimerContext';
 import { useNursingTimerContext } from '../context/NursingTimerContext';
 import {
@@ -79,6 +80,7 @@ function computePartnerElapsed(t: ActiveTimerState): number {
 
 export default function DashboardScreen() {
   const { user } = useAuth();
+  const { socket } = useSocket();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const sleepTimer = useSleepTimerContext();
@@ -271,6 +273,18 @@ export default function DashboardScreen() {
       loadPartnerTimers();
     }, [loadData, loadPartnerTimers])
   );
+
+  // Refresh partner banners in real-time via socket
+  useEffect(() => {
+    if (!socket) return;
+    const refresh = () => loadPartnerTimers();
+    socket.on('timer:updated', refresh);
+    socket.on('timer:cleared', refresh);
+    return () => {
+      socket.off('timer:updated', refresh);
+      socket.off('timer:cleared', refresh);
+    };
+  }, [socket, loadPartnerTimers]);
 
   const tools = [
     {

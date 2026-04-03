@@ -2,6 +2,7 @@ import { Response } from 'express';
 import prisma from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { getPartnership, hasAccessToBaby } from '../lib/partnerships';
+import { emitToPartner } from '../lib/socket';
 
 // Helper — get the partner userId for a given user (null if no partnership)
 async function getPartnerId(userId: string): Promise<string | null> {
@@ -59,6 +60,9 @@ export const activeTimersController = {
         },
       });
 
+      // Notify partner via WebSocket
+      emitToPartner(userId, 'timer:updated', timer).catch(() => {});
+
       res.json(timer);
     } catch (error) {
       console.error(error);
@@ -72,6 +76,10 @@ export const activeTimersController = {
       const userId = req.user!.userId;
       const { type } = req.params;
       await prisma.activeTimer.deleteMany({ where: { userId, type } });
+
+      // Notify partner that timer was stopped
+      emitToPartner(userId, 'timer:cleared', { userId, type }).catch(() => {});
+
       res.json({ ok: true });
     } catch (error) {
       console.error(error);
@@ -143,6 +151,9 @@ export const activeTimersController = {
         },
       });
 
+      // Notify the partner (timer owner) that their timer was modified
+      emitToPartner(userId, 'timer:updated', timer).catch(() => {});
+
       res.json(timer);
     } catch (error) {
       console.error(error);
@@ -158,6 +169,10 @@ export const activeTimersController = {
       const partnerId = await getPartnerId(userId);
       if (!partnerId) return res.status(404).json({ error: 'No partner found' });
       await prisma.activeTimer.deleteMany({ where: { userId: partnerId, type } });
+
+      // Notify the partner that their timer was stopped
+      emitToPartner(userId, 'timer:cleared', { userId: partnerId, type }).catch(() => {});
+
       res.json({ ok: true });
     } catch (error) {
       console.error(error);

@@ -1,4 +1,5 @@
 import express from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
@@ -17,10 +18,12 @@ import diaperRecordsRoutes from './routes/diaperRecords.routes';
 import growthRecordsRoutes from './routes/growthRecords.routes';
 import partnershipsRoutes from './routes/partnerships.routes';
 import activeTimersRoutes from './routes/activeTimers.routes';
+import { initSocket } from './lib/socket';
 
 dotenv.config();
 
 const app = express();
+const httpServer = createServer(app);
 const PORT = process.env.PORT || 3000;
 
 // Trust proxy — required when running behind Coolify/nginx reverse proxy
@@ -78,6 +81,9 @@ app.get('/', (_req, res) => {
   res.send('LactaMap API is running');
 });
 
-app.listen(PORT, () => {
+// Attach Socket.IO to the HTTP server
+initSocket(httpServer);
+
+httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

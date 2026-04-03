@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { pushActiveTimer, clearActiveTimer } from '../services/api';
+import { useSocket } from './SocketContext';
 
 const STORAGE_KEY = 'sleep_timer_active';
 
@@ -40,6 +41,7 @@ export function useSleepTimerContext(): SleepTimerContextValue {
 }
 
 export function SleepTimerProvider({ children }: { children: React.ReactNode }) {
+  const { socket } = useSocket();
   const [isRunning, setIsRunning] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [pauseTime, setPauseTime] = useState(0);
@@ -288,6 +290,34 @@ export function SleepTimerProvider({ children }: { children: React.ReactNode }) 
       babyName: remote.babyName,
     });
   }, [persistLocal]);
+
+  // Listen for partner socket events that affect this user's sleep timer
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleUpdated = (data: any) => {
+      if (data.type !== 'sleep') return;
+      loadFromRemote({
+        startedAt: data.startedAt,
+        pausedAt: data.pausedAt ?? null,
+        totalPausedMs: data.totalPausedMs ?? 0,
+        babyId: data.babyId ?? null,
+        babyName: data.babyName ?? null,
+      });
+    };
+
+    const handleCleared = (data: any) => {
+      if (data.type !== 'sleep') return;
+      reset();
+    };
+
+    socket.on('timer:updated', handleUpdated);
+    socket.on('timer:cleared', handleCleared);
+    return () => {
+      socket.off('timer:updated', handleUpdated);
+      socket.off('timer:cleared', handleCleared);
+    };
+  }, [socket, loadFromRemote, reset]);
 
   const hasStarted = sessionStartedAt !== null;
   const isPaused = !isRunning && hasStarted && elapsedTime > 0;

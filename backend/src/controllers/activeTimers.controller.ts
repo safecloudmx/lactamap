@@ -162,12 +162,81 @@ export const activeTimersController = {
   },
 
   // DELETE /api/v1/active-timers/partner/:type  — clear partner's active timer (when stopping their session)
+  // Also creates the session record for the timer owner so data is never lost.
   clearPartner: async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user!.userId;
       const { type } = req.params;
       const partnerId = await getPartnerId(userId);
       if (!partnerId) return res.status(404).json({ error: 'No partner found' });
+
+      // Read the timer before deleting so we can save the session
+      const timer = await prisma.activeTimer.findUnique({
+        where: { userId_type: { userId: partnerId, type } },
+      });
+
+      if (timer) {
+        const now = new Date();
+
+        if (type === 'nursing') {
+          let leftMs = timer.leftMs;
+          let rightMs = timer.rightMs;
+          // If timer was running, add elapsed since last server update
+          if (!timer.pausedAt && timer.activeSide) {
+            const sinceUpdate = now.getTime() - timer.updatedAt.getTime();
+            if (timer.activeSide === 'left') leftMs += sinceUpdate;
+            else rightMs += sinceUpdate;
+          }
+          const leftDuration = Math.floor(leftMs / 1000);
+          const rightDuration = Math.floor(rightMs / 1000);
+          const totalDuration = leftDuration + rightDuration;
+          if (totalDuration > 0) {
+            let lastSide: 'left' | 'right' | 'both' = 'both';
+            if (leftMs > 0 && rightMs === 0) lastSide = 'left';
+            else if (rightMs > 0 && leftMs === 0) lastSide = 'right';
+            await prisma.nursingSession.create({
+              data: {
+                userId: partnerId,
+                babyId: timer.babyId,
+                startedAt: timer.startedAt,
+                endedAt: now,
+                leftDuration,
+                rightDuration,
+                totalDuration,
+                totalPauseTime: Math.floor(timer.totalPausedMs / 1000),
+                lastSide,
+                notes: '',
+              },
+            });
+          }
+        } else {
+          // sleep
+          let totalDuration: number;
+          if (timer.pausedAt) {
+            totalDuration = Math.floor(
+              (timer.pausedAt.getTime() - timer.startedAt.getTime() - timer.totalPausedMs) / 1000
+            );
+          } else {
+            totalDuration = Math.floor(
+              (now.getTime() - timer.startedAt.getTime() - timer.totalPausedMs) / 1000
+            );
+          }
+          if (totalDuration > 0) {
+            await prisma.sleepSession.create({
+              data: {
+                userId: partnerId,
+                babyId: timer.babyId,
+                startedAt: timer.startedAt,
+                endedAt: now,
+                totalDuration,
+                totalPauseTime: Math.floor(timer.totalPausedMs / 1000),
+                notes: '',
+              },
+            });
+          }
+        }
+      }
+
       await prisma.activeTimer.deleteMany({ where: { userId: partnerId, type } });
 
       // Notify the partner that their timer was stopped

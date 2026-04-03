@@ -18,9 +18,8 @@ import { useNursingTimerContext } from '../context/NursingTimerContext';
 import {
   getLactarios, getPartnerActiveTimers,
   pushPartnerActiveTimer, clearPartnerActiveTimer,
-  createNursingSessionOnServer, createSleepSessionOnServer,
 } from '../services/api';
-import { Lactario, ActiveTimerState, FeedingSide } from '../types';
+import { Lactario, ActiveTimerState } from '../types';
 import { colors, spacing, typography, radii, shadows } from '../theme';
 
 let Location: any = null;
@@ -174,54 +173,7 @@ export default function DashboardScreen() {
   const handlePartnerStop = useCallback(async (t: ActiveTimerState) => {
     setActionLoading(`${t.id}-stop`);
     try {
-      const now = new Date();
-      if (t.type === 'nursing') {
-        let leftMs = t.leftMs;
-        let rightMs = t.rightMs;
-        if (!t.pausedAt && t.activeSide) {
-          const sinceUpdate = now.getTime() - new Date(t.updatedAt).getTime();
-          if (t.activeSide === 'left') leftMs += sinceUpdate;
-          else rightMs += sinceUpdate;
-        }
-        const leftDuration = Math.floor(leftMs / 1000);
-        const rightDuration = Math.floor(rightMs / 1000);
-        const totalDuration = leftDuration + rightDuration;
-        if (totalDuration > 0) {
-          let lastSide: FeedingSide = 'both';
-          if (leftMs > 0 && rightMs === 0) lastSide = 'left';
-          else if (rightMs > 0 && leftMs === 0) lastSide = 'right';
-          await createNursingSessionOnServer({
-            babyId: t.babyId || undefined,
-            startedAt: t.startedAt,
-            endedAt: now.toISOString(),
-            leftDuration,
-            rightDuration,
-            totalDuration,
-            totalPauseTime: Math.floor(t.totalPausedMs / 1000),
-            lastSide,
-          });
-        }
-      } else {
-        let totalDuration: number;
-        if (t.pausedAt) {
-          totalDuration = Math.floor(
-            (new Date(t.pausedAt).getTime() - new Date(t.startedAt).getTime() - t.totalPausedMs) / 1000
-          );
-        } else {
-          totalDuration = Math.floor(
-            (now.getTime() - new Date(t.startedAt).getTime() - t.totalPausedMs) / 1000
-          );
-        }
-        if (totalDuration > 0) {
-          await createSleepSessionOnServer({
-            babyId: t.babyId || undefined,
-            startedAt: t.startedAt,
-            endedAt: now.toISOString(),
-            totalDuration,
-            totalPauseTime: Math.floor(t.totalPausedMs / 1000),
-          });
-        }
-      }
+      // Backend handles session creation for the timer owner
       await clearPartnerActiveTimer(t.type as 'nursing' | 'sleep');
       setPartnerTimers(prev => prev.filter(x => x.id !== t.id));
     } catch (_) {} finally {
